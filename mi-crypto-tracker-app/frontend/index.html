@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crypto Tracker Online (Bybit + Backend)</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #121212;
+            color: #e0e0e0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            width: 95%;
+            max-width: 1200px;
+            margin-bottom: 20px;
+        }
+        .top-section-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            width: 95%;
+            max-width: 1200px;
+            margin-bottom: 20px;
+        }
+        #controls {
+            background-color: #1e1e1e;
+            padding: 15px;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 10px;
+            flex: 1;
+            min-width: 280px;
+        }
+        #coin-select {
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #444;
+            background-color: #333;
+            color: #e0e0e0;
+            font-size: 1em;
+            width: 100%;
+        }
+        #update-timer {
+            font-size: 0.9em;
+            color: #aaa;
+            margin-top: 5px;
+        }
+        #signals-panel {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 20px;
+            width: 95%;
+            max-width: 1200px;
+        }
+        .signal {
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 1.2em;
+            font-weight: bold;
+            text-align: center;
+            flex-grow: 1;
+            min-width: 150px;
+        }
+        .buy { background-color: #28a745; color: white; }
+        .sell { background-color: #dc3545; color: white; }
+        .hold { background-color: #6c757d; color: white; }
+        .overbought { background-color: #ffc107; color: #121212; }
+        .oversold { background-color: #17a2b8; color: white; }
+        .alert-buy {
+            animation: pulse-buy 1s infinite alternate;
+            border: 2px solid #28a745;
+        }
+        .alert-sell {
+            animation: pulse-sell 1s infinite alternate;
+            border: 2px solid #dc3545;
+        }
+        @keyframes pulse-buy {
+            from { box-shadow: 0 0 5px #28a745; }
+            to { box-shadow: 0 0 20px #28a745; }
+        }
+        @keyframes pulse-sell {
+            from { box-shadow: 0 0 5px #dc3545; }
+            to { box-shadow: 0 0 20px #dc3545; }
+        }
+        .chart-container {
+            background-color: #1e1e1e;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            margin-top: 20px;
+            height: 450px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+        .no-data-message {
+            color: #e0e0e0;
+            font-size: 1.5em;
+            text-align: center;
+        }
+        
+        #current-opportunities-board {
+            background-color: #1e1e1e;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            flex: 3;
+            min-width: 450px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        #current-opportunities-board h2 {
+            color: #e0e0e0;
+            margin-top: 0;
+            margin-bottom: 5px;
+            text-align: center;
+        }
+        .opportunity-columns {
+            display: flex;
+            gap: 10px;
+            flex-grow: 1;
+            min-height: 200px;
+        }
+        .opportunity-column {
+            background-color: #2a2a2a;
+            padding: 10px;
+            border-radius: 6px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .opportunity-column h3 {
+            color: #e0e0e0;
+            margin-top: 0;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+            text-align: center;
+        }
+        .opportunity-column ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            width: 100%;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+        .opportunity-column li {
+            background-color: #333;
+            padding: 8px;
+            margin-bottom: 5px;
+            border-radius: 4px;
+            font-size: 1em;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+        }
+        .opportunity-column li:last-child {
+            margin-bottom: 0;
+        }
+        .col-buy li { border-left: 4px solid #28a745; }
+        .col-sell li { border-left: 4px solid #dc3545; }
+        .col-hold li { border-left: 4px solid #6c757d; }
+
+        #indicator-selection-panel {
+            background-color: #1e1e1e;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            margin-top: 20px;
+            width: 95%;
+            max-width: 1200px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 15px;
+            align-items: center;
+        }
+        #indicator-selection-panel div {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        #indicator-selection-panel label {
+            font-size: 1em;
+            color: #e0e0e0;
+            cursor: pointer;
+        }
+        #indicator-selection-panel input[type="checkbox"] {
+            transform: scale(1.2);
+            cursor: pointer;
+        }
+        /* Nuevo estilo para el historial que ahora viene del backend */
+        #backend-historical-board {
+            background-color: #1e1e1e;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            margin-top: 20px;
+            width: 95%;
+            max-width: 1200px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        #backend-historical-board h2 {
+            color: #e0e0e0;
+            margin-top: 0;
+            margin-bottom: 5px;
+            text-align: center;
+        }
+        #backend-historical-board ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            overflow-y: auto;
+            max-height: 250px; /* Altura máxima para la lista histórica */
+        }
+        #backend-historical-board li {
+            padding: 8px 0;
+            border-bottom: 1px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.95em;
+        }
+        #backend-historical-board li:last-child {
+            border-bottom: none;
+        }
+        .historical-timestamp {
+            font-size: 0.8em;
+            color: #aaa;
+            margin-left: 10px;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@1.0.2"></script>
+</head>
+<body>
+    <h1>Crypto Tracker Online (Bybit + Backend)</h1>
+
+    <div class="top-section-container">
+        <div id="controls">
+            <label for="coin-select">Elige una Criptomoneda:</label>
+            <select id="coin-select">
+                <option value="BTCUSDT" selected>Bitcoin (BTC/USDT)</option>
+                <option value="ETHUSDT">Ethereum (ETH/USDT)</option>
+                <option value="BNBUSDT">BNB (BNB/USDT)</option>
+                <option value="XRPUSDT">XRP (XRP/USDT)</option>
+                <option value="SOLUSDT">Solana (SOL/USDT)</option>
+                <option value="ADAUSDT">Cardano (ADA/USDT)</option>
+                <option value="DOGEUSDT">Dogecoin (DOGE/USDT)</option>
+                <option value="SHIBUSDT">Shiba Inu (SHIB/USDT)</option>
+                <option value="DOTUSDT">Polkadot (DOT/USDT)</option>
+                <option value="LTCUSDT">Litecoin (LTC/USDT)</option>
+                <option value="LINKUSDT">Chainlink (LINK/USDT)</option>
+                <option value="MATICUSDT">Polygon (MATIC/USDT)</option>
+                <option value="TRXUSDT">Tron (TRX/USDT)</option>
+                <option value="AVAXUSDT">Avalanche (AVAX/USDT)</option>
+                <option value="UNIUSDT">Uniswap (UNI/USDT)</option>
+                <option value="FILUSDT">Filecoin (FIL/USDT)</option>
+                <option value="ICPUSDT">Internet Computer (ICP/USDT)</option>
+                <option value="APTUSDT">Aptos (APT/USDT)</option>
+                <option value="SUIUSDT">Sui (SUI/USDT)</option>
+                <option value="NEARUSDT">NEAR Protocol (NEAR/USDT)</option>
+                <option value="ATOMUSDT">Cosmos (ATOM/USDT)</option>
+                <option value="ARBUSD">Arbitrum (ARB/USDT)</option>
+                <option value="OPUSDT">Optimism (OP/USDT)</option>
+                <option value="IMXUSDT">Immutable X (IMX/USDT)</option>
+                <option value="AAVEUSDT">Aave (AAVE/USDT)</option>
+                <option value="ALGOUSDT">Algorand (ALGO/USDT)</option>
+                <option value="FTMUSDT">Fantom (FTM/USDT)</option>
+                <option value="VETUSDT">VeChain (VET/USDT)</option>
+                <option value="CHZUSDT">Chiliz (CHZ/USDT)</option>
+                <option value="GRTUSDT">The Graph (GRT/USDT)</option>
+                <option value="AXSUSDT">Axie Infinity (AXS/USDT)</option>
+                <option value="EOSUSDT">EOS (EOS/USDT)</option>
+                <option value="KLAYUSDT">Klaytn (KLAY/USDT)</option>
+                <option value="SANDUSDT">The Sandbox (SAND/USDT)</option>
+                <option value="MANAUSDT">Decentraland (MANA/USDT)</option>
+                </select>
+            <div id="update-timer"></div>
+            <p style="font-size: 0.8em; color: #888; margin-top: 10px;">
+                Selecciona una criptomoneda para ver su análisis detallado (gráficos y señales individuales).
+            </p>
+        </div>
+
+        <div id="current-opportunities-board">
+            <h2>Oportunidades de Trading (Todas las Criptos)</h2>
+            <div class="opportunity-columns">
+                <div class="opportunity-column col-buy">
+                    <h3>COMPRA</h3>
+                    <ul id="buy-list">
+                        <li>Cargando...</li> 
+                    </ul>
+                </div>
+                <div class="opportunity-column col-sell">
+                    <h3>VENTA</h3>
+                    <ul id="sell-list">
+                        <li>Cargando...</li>
+                    </ul>
+                </div>
+                <div class="opportunity-column col-hold">
+                    <h3>MANTENER</h3>
+                    <ul id="hold-list">
+                        <li>Cargando...</li>
+                    </ul>
+                </div>
+            </div>
+            <p style="font-size: 0.8em; color: #888; margin-top: 10px; text-align: center;">
+                Recomendaciones basadas en análisis técnico (SMA, RSI, BB) para todas las criptomonedas listadas.
+                La actualización de esta sección se realiza progresivamente.
+            </p>
+        </div>
+    </div>
+
+    <div id="indicator-selection-panel" class="container">
+        <div>
+            <input type="checkbox" id="toggle-sma-short" checked>
+            <label for="toggle-sma-short">SMA Corta</label>
+        </div>
+        <div>
+            <input type="checkbox" id="toggle-sma-long" checked>
+            <label for="toggle-sma-long">SMA Larga</label>
+        </div>
+        <div>
+            <input type="checkbox" id="toggle-bb-upper" checked>
+            <label for="toggle-bb-upper">BB Superior</label>
+        </div>
+        <div>
+            <input type="checkbox" id="toggle-bb-middle" checked>
+            <label for="toggle-bb-middle">BB Media</label>
+        </div>
+        <div>
+            <input type="checkbox" id="toggle-bb-lower" checked>
+            <label for="toggle-bb-lower">BB Inferior</label>
+        </div>
+        <div>
+            <input type="checkbox" id="toggle-rsi" checked>
+            <label for="toggle-rsi">RSI</label>
+        </div>
+    </div>
+
+    <div id="signals-panel" class="container">
+        <div id="sma-signal" class="signal hold">Cargando...</div>
+        <div id="rsi-signal" class="signal hold">Cargando...</div>
+        <div id="bb-signal" class="signal hold">Cargando...</div>
+    </div>
+    
+    <div id="price-chart-container" class="chart-container container">
+        <canvas id="priceChart"></canvas>
+        <div id="price-no-data" class="no-data-message" style="display:none;">No hay datos para mostrar el gráfico de precios.</div>
+    </div>
+    
+    <div id="backend-historical-board" class="container">
+        <h2>Historial de Recomendaciones (Desde Backend)</h2>
+        <ul id="backend-historical-list">
+            <li>Cargando historial...</li>
+        </ul>
+        <p style="font-size: 0.8em; color: #888; margin-top: 10px; text-align: center;">
+            Este historial se guarda y recupera desde el servidor backend (archivo data.csv).
+        </p>
+    </div>
+
+    <script>
+        // ===================================================================================
+        // --- CONFIGURACIÓN E INICIALIZACIÓN ---
+        // ===================================================================================
+
+        // URL BASE DE TU BACKEND (¡IMPORTANTE: Cambiar esto cuando lo publiques!)
+        // Durante el desarrollo local, usa 'http://127.0.0.1:5000'
+        // Después de publicar en Render, usa la URL que Render te dé (ej. 'https://tu-backend-nombre.onrender.com')
+        const BACKEND_URL = 'http://127.0.0.1:5000'; 
+
+        const BYBIT_INTERVAL = "60"; 
+        const BYBIT_CATEGORY = "spot";
+        const BYBIT_LIMIT = 200;
+
+        const UPDATE_INTERVAL_SELECTED_CRYPTO = 120000; // 2 minutos
+        const UPDATE_INTERVAL_ALL_CRYPTOS = 5 * 60 * 1000; // 5 minutos
+        const ALL_CRYPTOS_API_DELAY = 1500; // 1.5 segundos
+        const HISTORY_UPDATE_INTERVAL = 60000; // 1 minuto para actualizar el historial desde el backend
+
+        const SMA_SHORT_PERIOD = 20;
+        const SMA_LONG_PERIOD = 50;
+        const BB_PERIOD = 20;
+        const BB_STD_DEV = 2;
+        const RSI_PERIOD = 14;
+        const RSI_OVERBOUGHT = 70;
+        const RSI_OVERSOLD = 30;
+
+        const coinSelect = document.getElementById('coin-select');
+        const updateTimerDiv = document.getElementById('update-timer');
+        const smaSignalDiv = document.getElementById('sma-signal');
+        const rsiSignalDiv = document.getElementById('rsi-signal');
+        const bbSignalDiv = document.getElementById('bb-signal');
+        
+        const buyList = document.getElementById('buy-list');
+        const sellList = document.getElementById('sell-list');
+        const holdList = document.getElementById('hold-list');
+
+        const priceChartCanvas = document.getElementById('priceChart');
+        const priceNoDataMessage = document.getElementById('price-no-data');
+
+        const toggleSmaShort = document.getElementById('toggle-sma-short');
+        const toggleSmaLong = document.getElementById('toggle-sma-long');
+        const toggleBbUpper = document.getElementById('toggle-bb-upper');
+        const toggleBbMiddle = document.getElementById('toggle-bb-middle');
+        const toggleBbLower = document.getElementById('toggle-bb-lower');
+        const toggleRsi = document.getElementById('toggle-rsi');
+
+        const backendHistoricalList = document.getElementById('backend-historical-list'); // Nuevo elemento
+
+        let priceChartInstance, countdownInterval;
+        let isProcessingAllCryptos = false;
+
+        let allCryptos = []; 
+
+        let currentPriceDataCache = null;
+        let currentSmaShortCache = null;
+        let currentSmaLongCache = null;
+        let currentBollingerBandsCache = null;
+        let currentRsiCache = null; 
+
+        // ===================================================================================
+        // --- INICIALIZACIÓN DE LA APLICACIÓN ---
+        // ===================================================================================
+
+        // En la versión estática, la lista de criptos se extrae directamente del HTML.
+        function initStaticCryptoList() {
+            allCryptos = [];
+            const options = coinSelect.options;
+            if (options.length === 0) {
+                console.error("Error: No se encontraron opciones en el selector de criptomonedas. Asegúrate de que el HTML esté cargado correctamente.");
+                return;
+            }
+            for (let i = 0; i < options.length; i++) {
+                allCryptos.push(options[i].value);
+            }
+            console.log("Lista de criptomonedas estática cargada. Total:", allCryptos.length);
+        }
+
+        // ===================================================================================
+        // --- LÓGICA PRINCIPAL DE ANÁLISIS ---
+        // ===================================================================================
+
+        /**
+         * Función que se ejecuta al cargar la página o al cambiar la crypto seleccionada.
+         * Se enfoca en actualizar los gráficos y señales individuales de la crypto seleccionada.
+         */
+        async function runSelectedCryptoAnalysis() {
+            console.log("Iniciando análisis para la criptomoneda seleccionada...");
+            if (countdownInterval) clearInterval(countdownInterval);
+
+            smaSignalDiv.textContent = 'Cargando...';
+            rsiSignalDiv.textContent = 'Cargando...';
+            bbSignalDiv.textContent = 'Cargando...';
+            smaSignalDiv.className = 'signal hold';
+            rsiSignalDiv.className = 'signal hold';
+            bbSignalDiv.className = 'signal hold';
+            updateTimerDiv.textContent = "";
+
+            priceNoDataMessage.style.display = 'none';
+            priceChartCanvas.style.display = 'block';
+
+            const selectedSymbol = coinSelect.value;
+            if (!selectedSymbol) {
+                console.warn("No hay criptomoneda seleccionada para el análisis detallado (o la lista está vacía).");
+                if (priceChartInstance) priceChartInstance.destroy();
+                priceChartCanvas.style.display = 'none'; 
+                priceNoDataMessage.textContent = "No hay criptomoneda seleccionada o datos iniciales."
+                priceNoDataMessage.style.display = 'flex'; 
+                return;
+            }
+            console.log(`Obteniendo datos de Bybit para: ${selectedSymbol}`);
+
+            const prices = await getCryptoData(selectedSymbol, BYBIT_INTERVAL, BYBIT_CATEGORY, BYBIT_LIMIT);
+            
+            const minRequiredData = Math.max(SMA_LONG_PERIOD, BB_PERIOD, RSI_PERIOD);
+            if (!prices || prices.length < minRequiredData) {
+                console.error(`Datos insuficientes para calcular indicadores de ${selectedSymbol}. Se necesitan al menos ${minRequiredData} puntos, se obtuvieron ${prices ? prices.length : 0}.`, prices);
+                smaSignalDiv.textContent = 'Error: Datos insuficientes.';
+                rsiSignalDiv.textContent = 'Error: Datos insuficientes.';
+                bbSignalDiv.textContent = 'Error: Datos insuficientes.';
+                updateTimerDiv.textContent = "Datos insuficientes para indicadores";
+                
+                if (priceChartInstance) priceChartInstance.destroy();
+                priceChartCanvas.style.display = 'none';
+                priceNoDataMessage.textContent = "Datos insuficientes para gráficos."
+                priceNoDataMessage.style.display = 'flex';
+                return;
+            }
+
+            console.log(`Datos recibidos para ${selectedSymbol}. Número de puntos: ${prices.length}`);
+
+            currentPriceDataCache = prices; 
+            const closingPrices = prices.map(p => p.y);
+
+            console.log("Calculando indicadores para la cripto seleccionada...");
+            currentSmaShortCache = calculateSMA(closingPrices, SMA_SHORT_PERIOD);
+            currentSmaLongCache = calculateSMA(closingPrices, SMA_LONG_PERIOD);
+            currentBollingerBandsCache = calculateBollingerBands(closingPrices, BB_PERIOD, BB_STD_DEV);
+            currentRsiCache = calculateRSI(closingPrices, RSI_PERIOD); 
+            
+            console.log("Renderizando gráficos para la cripto seleccionada...");
+            renderPriceChart(currentPriceDataCache, currentSmaShortCache, currentSmaLongCache, currentBollingerBandsCache, currentRsiCache);
+            
+            console.log("Actualizando señales individuales...");
+            const signals = updateSignals(currentSmaShortCache, currentSmaLongCache, currentRsiCache, currentBollingerBandsCache, closingPrices);
+            
+            // Guardar esta recomendación en el backend
+            await saveRecommendationToBackend(selectedSymbol, signals.overall);
+
+            startUpdateTimer(UPDATE_INTERVAL_SELECTED_CRYPTO / 1000);
+            console.log("Análisis de criptomoneda seleccionada completado.");
+        }
+
+        /**
+         * Función para actualizar el tablero de oportunidades con TODAS las criptomonedas.
+         * Realiza una carga progresiva y actualiza el DOM después de cada crypto.
+         */
+        async function updateAllCryptosOpportunities() {
+            if (isProcessingAllCryptos) {
+                console.log("Ya se está procesando el análisis de todas las criptos. Saltando esta ejecución.");
+                return;
+            }
+            if (allCryptos.length === 0) {
+                 console.warn("No hay criptomonedas en la lista estática para actualizar las oportunidades.");
+                 renderOpportunityColumns({ buy: [], sell: [], hold: [], error: ['No hay criptos para mostrar.'] });
+                 return;
+            }
+
+            isProcessingAllCryptos = true;
+            console.log("Iniciando análisis para TODAS las criptomonedas (carga progresiva)...");
+
+            const tempRecommendations = { buy: [], sell: [], hold: [], error: [] }; 
+            renderOpportunityColumns(tempRecommendations); // Renderiza los mensajes iniciales (vacíos o cargando)
+
+            for (let i = 0; i < allCryptos.length; i++) {
+                const symbol = allCryptos[i];
+
+                try {
+                    const prices = await getCryptoData(symbol, BYBIT_INTERVAL, BYBIT_CATEGORY, BYBIT_LIMIT);
+
+                    const minRequiredData = Math.max(SMA_LONG_PERIOD, BB_PERIOD, RSI_PERIOD);
+                    if (!prices || prices.length < minRequiredData) {
+                        console.warn(`[Todas las Cryptos] Datos insuficientes para ${symbol}.`);
+                        tempRecommendations.hold.push(`${symbol} (Datos Insuficientes)`); 
+                    } else {
+                        const closingPrices = prices.map(p => p.y);
+                        const smaShort = calculateSMA(closingPrices, SMA_SHORT_PERIOD);
+                        const smaLong = calculateSMA(closingPrices, SMA_LONG_PERIOD);
+                        const bollingerBands = calculateBollingerBands(closingPrices, BB_PERIOD, BB_STD_DEV);
+                        const rsi = calculateRSI(closingPrices, RSI_PERIOD);
+
+                        const signals = getCombinedSignals(smaShort, smaLong, rsi, bollingerBands, closingPrices);
+                        
+                        if (signals.overall === 'buy') {
+                            tempRecommendations.buy.push(symbol);
+                        } else if (signals.overall === 'sell') {
+                            tempRecommendations.sell.push(symbol);
+                        } else {
+                            tempRecommendations.hold.push(symbol);
+                        }
+                    }
+
+                } catch (error) {
+                    console.error(`[Todas las Cryptos] Error al procesar ${symbol}:`, error);
+                    tempRecommendations.hold.push(`${symbol} (Error)`); 
+                }
+
+                renderOpportunityColumns(tempRecommendations);
+
+                if (i < allCryptos.length - 1) {
+                    await new Promise(resolve => setTimeout(resolve, ALL_CRYPTOS_API_DELAY));
+                }
+            }
+            isProcessingAllCryptos = false;
+            console.log("Análisis de TODAS las criptomonedas completado.");
+        }
+
+
+        // Función auxiliar para obtener la recomendación combinada
+        function getCombinedSignals(smaShort, smaLong, rsi, bollingerBands, closingPrices) {
+            let smaRec = 'hold';
+            let rsiRec = 'hold';
+            let bbRec = 'hold';
+
+            const validSmaShort = smaShort.filter(v => v !== null);
+            const validSmaLong = smaLong.filter(v => v !== null);
+            if (validSmaShort.length >= 2 && validSmaLong.length >= 2) {
+                const lastSmaShort = validSmaShort[validSmaShort.length - 1].y;
+                const prevSmaShort = validSmaShort[validSmaShort.length - 2].y;
+                const lastSmaLong = validSmaLong[validSmaLong.length - 1].y;
+                const prevSmaLong = validSmaLong[validSmaLong.length - 2].y;
+                if (prevSmaShort <= prevSmaLong && lastSmaShort > lastSmaLong) smaRec = 'buy';
+                else if (prevSmaShort >= prevSmaLong && lastSmaShort < lastSmaLong) smaRec = 'sell';
+            }
+
+            const validRsi = rsi.filter(v => v !== null);
+            if (validRsi.length > 0) {
+                const lastRsi = validRsi[validRsi.length - 1].y;
+                if (lastRsi > RSI_OVERBOUGHT) rsiRec = 'sell';
+                else if (lastRsi < RSI_OVERSOLD) rsiRec = 'buy';
+            }
+
+            const validBbUpper = bollingerBands.upper.filter(v => v !== null);
+            const validBbLower = bollingerBands.lower.filter(v => v !== null);
+            const lastPrice = closingPrices[closingPrices.length - 1]; 
+
+            if (validBbUpper.length > 0 && validBbLower.length > 0 && lastPrice !== undefined) {
+                const lastBbUpper = validBbUpper[validBbUpper.length - 1].y;
+                const lastBbLower = validBbLower[validBbLower.length - 1].y;
+                if (lastPrice > lastBbUpper) bbRec = 'sell';
+                else if (lastPrice < lastBbLower) bbRec = 'buy';
+            }
+
+            let buyCount = 0;
+            let sellCount = 0;
+
+            if (smaRec === 'buy') buyCount++;
+            if (rsiRec === 'buy') buyCount++;
+            if (bbRec === 'buy') buyCount++;
+
+            if (smaRec === 'sell') sellCount++;
+            if (rsiRec === 'sell') sellCount++;
+            if (bbRec === 'sell') sellCount++;
+
+            let overallRecommendation = 'hold';
+            if (buyCount > sellCount) overallRecommendation = 'buy';
+            else if (sellCount > buyCount) overallRecommendation = 'sell';
+            
+            return { sma: smaRec, rsi: rsiRec, bb: bbRec, overall: overallRecommendation };
+        }
+
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            initStaticCryptoList(); 
+
+            if (allCryptos.length > 0) {
+                runSelectedCryptoAnalysis();
+                updateAllCryptosOpportunities();
+                loadHistoricalRecommendationsFromBackend(); // Cargar historial al inicio
+
+                setInterval(runSelectedCryptoAnalysis, UPDATE_INTERVAL_SELECTED_CRYPTO);
+                setInterval(updateAllCryptosOpportunities, UPDATE_INTERVAL_ALL_CRYPTOS); 
+                setInterval(loadHistoricalRecommendationsFromBackend, HISTORY_UPDATE_INTERVAL); // Actualizar historial
+            } else {
+                console.error("No se encontraron criptomonedas en la lista estática. La aplicación no puede iniciar correctamente.");
+                priceNoDataMessage.textContent = "Error: No se encontraron criptomonedas en la lista.";
+                priceNoDataMessage.style.display = 'flex';
+                renderOpportunityColumns({ buy: [], sell: [], hold: [], error: ['No hay criptos en la lista.'] });
+            }
+        });
+
+        coinSelect.addEventListener('change', runSelectedCryptoAnalysis);
+
+        const indicatorCheckboxes = document.querySelectorAll('#indicator-selection-panel input[type="checkbox"]');
+        indicatorCheckboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', () => {
+                if (currentPriceDataCache) { // Solo redibujar si hay datos en caché
+                    renderPriceChart(currentPriceDataCache, currentSmaShortCache, currentSmaLongCache, currentBollingerBandsCache, currentRsiCache);
+                } else {
+                    console.warn("No hay datos en caché para redibujar el gráfico con los indicadores.");
+                }
+            });
+        });
+
+        // ===================================================================================
+        // --- FUNCIONES DE OBTENCIÓN DE DATOS (BYBIT API) ---
+        // ===================================================================================
+
+        async function getCryptoData(symbol, interval = "60", category = "spot", limit = 200) {
+            const url = `https://api.bybit.com/v5/market/kline?category=${category}&symbol=${symbol}&interval=${interval}&limit=${limit}`;
+
+            try {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    const errorDetails = await response.text();
+                    throw new Error(`Error de red de Bybit para ${symbol}: ${response.status} - ${response.statusText}. Detalles: ${errorDetails.substring(0, Math.min(errorDetails.length, 200))}...`);
+                }
+                
+                const data = await response.json();
+                
+                if (!data || !data.result || !data.result.list || data.result.list.length === 0) {
+                    throw new Error(`La API de Bybit para ${symbol} devolvió una respuesta válida pero sin datos de klines.`);
+                }
+                
+                const formattedPrices = data.result.list.map(kline => ({
+                    x: parseInt(kline[0]),
+                    y: parseFloat(kline[4])
+                }));
+
+                return formattedPrices.reverse(); 
+
+            } catch (error) {
+                console.error(`Error al obtener datos de la API de Bybit para ${symbol}:`, error);
+                return null;
+            }
+        }
+
+        // ===================================================================================
+        // --- FUNCIONES DE CÁLCULO DE INDICADORES ---
+        // ===================================================================================
+
+        function calculateSMA(data, period) {
+            let sma = [];
+            for (let i = 0; i < data.length; i++) {
+                if (i < period - 1) {
+                    sma.push(null);
+                } else {
+                    const slice = data.slice(i - period + 1, i + 1);
+                    const sum = slice.reduce((acc, val) => acc + val, 0);
+                    sma.push({ y: sum / period });
+                }
+            }
+            return sma;
+        }
+
+        function calculateBollingerBands(data, period, stdDevMultiplier) {
+            let middle = [], upper = [], lower = [];
+            for (let i = 0; i < data.length; i++) {
+                if (i < period - 1) {
+                    middle.push(null);
+                    upper.push(null);
+                    lower.push(null);
+                } else {
+                    const slice = data.slice(i - period + 1, i + 1);
+                    const mean = slice.reduce((acc, val) => acc + val, 0) / period;
+                    const stdDev = Math.sqrt(slice.reduce((acc, val) => acc + Math.pow(val - mean, 2), 0) / period);
+                    
+                    middle.push({ y: mean });
+                    upper.push({ y: mean + (stdDev * stdDevMultiplier) });
+                    lower.push({ y: mean - (stdDev * stdDevMultiplier) });
+                }
+            }
+            return { middle, upper, lower };
+        }
+
+        function calculateRSI(data, period) {
+            let rsiValues = [];
+            
+            for (let i = 0; i < period; i++) {
+                rsiValues.push(null);
+            }
+
+            if (data.length < period + 1) {
+                return rsiValues;
+            }
+
+            let avgGain = 0;
+            let avgLoss = 0;
+
+            for (let i = 1; i <= period; i++) {
+                const diff = data[i] - data[i - 1];
+                if (diff > 0) {
+                    avgGain += diff;
+                } else {
+                    avgLoss += Math.abs(diff);
+                }
+            }
+            avgGain /= period;
+            avgLoss /= period;
+
+            if (avgLoss === 0) {
+                rsiValues.push({ y: 100 });
+            } else {
+                const rs = avgGain / avgLoss;
+                rsiValues.push({ y: 100 - (100 / (1 + rs)) });
+            }
+
+            for (let i = period + 1; i < data.length; i++) {
+                const diff = data[i] - data[i - 1];
+                let currentGain = diff > 0 ? diff : 0;
+                let currentLoss = diff < 0 ? Math.abs(diff) : 0;
+
+                avgGain = ((avgGain * (period - 1)) + currentGain) / period;
+                avgLoss = ((avgLoss * (period - 1)) + currentLoss) / period;
+
+                if (avgLoss === 0) {
+                    rsiValues.push({ y: 100 });
+                } else {
+                    const rs = avgGain / avgLoss;
+                    rsiValues.push({ y: 100 - (100 / (1 + rs)) });
+                }
+            }
+            return rsiValues;
+        }
+
+        // ===================================================================================
+        // --- FUNCIONES DE PERSISTENCIA (INTERACCIÓN CON BACKEND) ---
+        // ===================================================================================
+
+        /**
+         * Guarda una recomendación en el backend.
+         * @param {string} symbol - El símbolo de la criptomoneda.
+         * @param {string} recommendation - La recomendación ('buy', 'sell', 'hold').
+         */
+        async function saveRecommendationToBackend(symbol, recommendation) {
+            try {
+                const response = await fetch(`${BACKEND_URL}/save_recommendation`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        symbol: symbol,
+                        recommendation: recommendation,
+                        timestamp: new Date().toISOString()
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Error al guardar en el backend: ${response.statusText}`);
+                }
+                const result = await response.json();
+                console.log('Recomendación guardada en backend:', result.message);
+            } catch (error) {
+                console.error('Error al guardar recomendación en backend:', error);
+            }
+        }
+
+        /**
+         * Carga el historial de recomendaciones desde el backend.
+         */
+        async function loadHistoricalRecommendationsFromBackend() {
+            backendHistoricalList.innerHTML = '<li>Cargando historial desde el servidor...</li>';
+            try {
+                const response = await fetch(`${BACKEND_URL}/get_recommendations`);
+                if (!response.ok) {
+                    throw new Error(`Error al cargar historial desde el backend: ${response.statusText}`);
+                }
+                const history = await response.json(); // Se espera un array de objetos
+
+                backendHistoricalList.innerHTML = '';
+                if (history.length === 0) {
+                    backendHistoricalList.innerHTML = `<li>No hay historial de recomendaciones aún.</li>`;
+                    return;
+                }
+
+                history.forEach(entry => {
+                    const date = new Date(entry.timestamp);
+                    const timeString = date.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+                    const dateString = date.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
+
+                    let recClass = 'action-hold';
+                    let recText = 'MANTENER';
+                    if (entry.recommendation === 'buy') {
+                        recClass = 'action-buy';
+                        recText = 'COMPRA';
+                    } else if (entry.recommendation === 'sell') {
+                        recClass = 'action-sell';
+                        recText = 'VENTA';
+                    }
+
+                    const listItem = document.createElement('li');
+                    listItem.innerHTML = `
+                        <div class="opportunity-item">
+                            <span class="opportunity-label">${entry.symbol}</span> 
+                            <span class="historical-timestamp">${dateString} ${timeString}</span>
+                            <span class="opportunity-action ${recClass}">${recText}</span>
+                        </div>
+                    `;
+                    backendHistoricalList.appendChild(listItem);
+                });
+                console.log(`Historial cargado desde backend. Total: ${history.length} entradas.`);
+            } catch (error) {
+                console.error('Error al cargar historial desde backend:', error);
+                backendHistoricalList.innerHTML = `<li>Error al cargar historial: ${error.message}</li>`;
+            }
+        }
+    </script>
+</body>
+</html>
