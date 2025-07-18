@@ -988,7 +988,7 @@
         // ===================================================================================
 
         async function runSelectedCryptoAnalysis() {
-            console.log("Inicio de runSelectedCryptoAnalysis."); // Log de inicio
+            console.log("Inicio de runSelectedCryptoAnalysis.");
             if (countdownInterval) clearInterval(countdownInterval);
 
             smaSignalDiv.textContent = 'Cargando...';
@@ -1045,18 +1045,20 @@
             renderPriceChart(currentPriceDataCache, currentSmaShortCache, currentSmaLongCache, currentBollingerBandsCache, currentRsiCache);
             
             console.log("runSelectedCryptoAnalysis: Actualizando señales individuales...");
-            const signals = updateSignals(currentSmaShortCache, currentSmaLongCache, currentRsiCache, currentBollingerBandsCache, closingPrices);
-            
-            console.log("runSelectedCryptoAnalysis: Intentando guardar recomendación en backend..."); // Log antes de guardar
-            await saveRecommendationToBackend(selectedSymbol, signals.overall); // Se guarda la recomendación
-            console.log("runSelectedCryptoAnalysis: Recomendación enviada a backend."); // Log después de guardar
+            // Aquí obtenemos las señales combinadas directamente
+            const signals = getCombinedSignals(currentSmaShortCache, currentSmaLongCache, currentRsiCache, currentBollingerBandsCache, closingPrices);
+            updateSignals(currentSmaShortCache, currentSmaLongCache, currentRsiCache, currentBollingerBandsCache, closingPrices); // Actualiza los paneles individuales
+
+            console.log("runSelectedCryptoAnalysis: Intentando guardar recomendación en backend...");
+            await saveRecommendationToBackend(selectedSymbol, signals.overall); // Usamos signals.overall directamente
+            console.log("runSelectedCryptoAnalysis: Recomendación enviada a backend.");
 
             startUpdateTimer(UPDATE_INTERVAL_SELECTED_CRYPTO / 1000);
             console.log("Análisis de criptomoneda seleccionada completado.");
         }
 
         async function updateAllCryptosOpportunities() {
-            console.log("Inicio de updateAllCryptosOpportunities."); // Log de inicio
+            console.log("Inicio de updateAllCryptosOpportunities.");
             if (isProcessingAllCryptos) {
                 console.log("Ya se está procesando el análisis de todas las criptos. Saltando esta ejecución.");
                 return;
@@ -1071,18 +1073,18 @@
             console.log("updateAllCryptosOpportunities: Iniciando análisis para TODAS las criptomonedas (carga progresiva)...");
 
             const tempRecommendations = { buy: [], sell: [], hold: [], error: [] }; 
-            renderOpportunityColumns(tempRecommendations); // Renderiza los mensajes iniciales
+            renderOpportunityColumns(tempRecommendations);
 
             for (let i = 0; i < allCryptos.length; i++) {
                 const symbol = allCryptos[i];
-                console.log(`updateAllCryptosOpportunities: Procesando ${symbol} (${i + 1}/${allCryptos.length}).`); // Log por crypto
+                console.log(`updateAllCryptosOpportunities: Procesando ${symbol} (${i + 1}/${allCryptos.length}).`);
 
                 try {
                     const prices = await getCryptoData(symbol, BYBIT_INTERVAL, BYBIT_CATEGORY, BYBIT_LIMIT);
 
                     const minRequiredData = Math.max(SMA_LONG_PERIOD, BB_PERIOD, RSI_PERIOD);
                     if (!prices || prices.length < minRequiredData) {
-                        console.warn(`updateAllCryptosOpportunities: Datos insuficientes para ${symbol}.`);
+                        console.warn(`[Todas las Cryptos] Datos insuficientes para ${symbol}.`);
                         tempRecommendations.hold.push(`${symbol} (Datos Insuficientes)`); 
                     } else {
                         const closingPrices = prices.map(p => p.y);
@@ -1103,7 +1105,7 @@
                     }
 
                 } catch (error) {
-                    console.error(`updateAllCryptosOpportunities: Error al procesar ${symbol}:`, error);
+                    console.error(`[Todas las Cryptos] Error al procesar ${symbol}:`, error);
                     tempRecommendations.hold.push(`${symbol} (Error)`); 
                 }
 
@@ -1181,9 +1183,9 @@
             initStaticCryptoList(); 
 
             if (allCryptos.length > 0) {
-                runSelectedCryptoAnalysis(); // Inicia el análisis para la crypto seleccionada
-                updateAllCryptosOpportunities(); // Inicia la actualización de todas las oportunidades
-                loadHistoricalRecommendationsFromBackend(); // Carga el historial al inicio
+                runSelectedCryptoAnalysis(); 
+                updateAllCryptosOpportunities();
+                loadHistoricalRecommendationsFromBackend(); 
 
                 setInterval(runSelectedCryptoAnalysis, UPDATE_INTERVAL_SELECTED_CRYPTO);
                 setInterval(updateAllCryptosOpportunities, UPDATE_INTERVAL_ALL_CRYPTOS); 
