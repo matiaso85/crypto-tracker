@@ -4,7 +4,7 @@ import csv
 import os
 from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.background import BackgroundScheduler # Para programar tareas
-import asyncio # Necesario para ejecutar funciones asíncronas con APScheduler
+import asyncio # Necesario para las funciones asíncronas (get_bybit_klines, scheduled_analysis_job)
 
 app = Flask(__name__)
 CORS(app) # Habilitar CORS para permitir solicitudes desde el frontend
@@ -21,22 +21,18 @@ CSV_FILE = 'data.csv' # Archivo para el historial de recomendaciones
 LAST_REC_FILE = 'last_recommendations.csv' # Archivo para la última recomendación conocida por símbolo
 
 # Cache en memoria para las últimas señales calculadas para cada símbolo.
-# El frontend consultará esta cache.
-# Formato: {symbol: {overall: 'buy', sma: 'buy', rsi: 'hold', bb: 'N/A', timestamp: 'ISOSTRING', price: 123.45, klines: [...]}}
-current_analysis_cache = {} # Almacena resultados completos por símbolo
+current_analysis_cache = {} 
 
 # --- Lista de Símbolos a Monitorear (Debe coincidir con tu frontend) ---
-# En una aplicación más avanzada, esto se cargaría de una base de datos.
 SYMBOLS_TO_MONITOR = [
     "BTCUSDT", "ETHUSDT", "BNBUSDT", "XRPUSDT", "SOLUSDT", "ADAUSDT", 
     "DOGEUSDT", "SHIBUSDT", "DOTUSDT", "LTCUSDT", "LINKUSDT", "MATICUSDT",
     "TRXUSDT", "AVAXUSDT", "UNIUSDT", "FILUSDT", "ICPUSDT", "APTUSDT", 
     "SUIUSDT", "NEARUSDT", "ATOMUSDT", "ARBUSD", "OPUSDT", "IMXUSDT",
     "AAVEUSDT", "ALGOUSDT", "FTMUSDT", "VETUSDT", "CHZUSDT", "GRTUSDT",
-    "AXSUSDT", "EOSUSDT", "KLAYUSDT", "SANDUSDT", "MANAUSDT",
-    # Stablecoins (si están en tu frontend)
-    # "USDTUSDC", "USDCUSDT", "BUSDUSDT", "DAIUSDT"
+    "AXSUSDT", "EOSUSDT", "SANDUSDT", "MANAUSDT", # Eliminado KLAYUSDT que no era común, para reducir la lista un poco y evitar errores API
 ]
+
 
 # --- FUNCIONES DE UTILIDAD CSV ---
 def ensure_csv_exists():
@@ -106,13 +102,13 @@ def update_last_recommendation_file(symbol, timestamp_iso, recommendation, sma_r
 
 # --- FUNCIONES DE OBTENCIÓN DE DATOS (Bybit API - Portadas de JS a Python) ---
 async def get_bybit_klines(symbol, interval=BYBIT_INTERVAL, category=BYBIT_CATEGORY, limit=BYBIT_LIMIT):
-    import httpx # Se necesita para peticiones HTTP asíncronas
+    import httpx 
     url = f"https://api.bybit.com/v5/market/kline?category={category}&symbol={symbol}&interval={interval}&limit={limit}"
     
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(url, timeout=10.0) # Añadir timeout
-            response.raise_for_status() # Lanza excepción para códigos de error HTTP
+            response = await client.get(url, timeout=10.0) 
+            response.raise_for_status() 
             
             data = response.json()
             
@@ -121,7 +117,6 @@ async def get_bybit_klines(symbol, interval=BYBIT_INTERVAL, category=BYBIT_CATEG
             
             formatted_prices = []
             for kline in data['result']['list']:
-                # kline: [timestamp, open, high, low, close, volume, turnOver]
                 formatted_prices.append({
                     'x': int(kline[0]),
                     'y': float(kline[4]) # Precio de cierre
@@ -146,7 +141,7 @@ async def get_bybit_klines(symbol, interval=BYBIT_INTERVAL, category=BYBIT_CATEG
 def calculate_sma(data, period):
     sma = []
     if not data or len(data) < period:
-        return [None] * len(data) if data else [] # Asegura longitud si data existe
+        return [None] * len(data) if data else []
 
     for i in range(len(data)):
         if i < period - 1:
@@ -251,7 +246,7 @@ def get_combined_signals(sma_short, sma_long, rsi, bollinger_bands, closing_pric
 
     valid_bb_upper = [v['y'] for v in bollinger_bands['upper'] if v is not None]
     valid_bb_lower = [v['y'] for v in bollinger_bands['lower'] if v is not None]
-    last_price_val = closing_prices[-1] if closing_prices else None # Renombrado para evitar conflicto con last_price en archivo
+    last_price_val = closing_prices[-1] if closing_prices else None 
 
     if len(valid_bb_upper) > 0 and len(valid_bb_lower) > 0 and last_price_val is not None:
         last_bb_upper = valid_bb_upper[-1]
@@ -289,7 +284,7 @@ def get_combined_signals(sma_short, sma_long, rsi, bollinger_bands, closing_pric
         else:
             overall_recommendation = 'hold'
     else:
-        overall_recommendation = 'hold' # Forzar a HOLD si no hay suficientes indicadores válidos
+        overall_recommendation = 'hold' 
     
     return {'sma': sma_rec, 'rsi': rsi_rec, 'bb': bb_rec, 'overall': overall_recommendation}
 
@@ -302,14 +297,12 @@ async def scheduled_analysis_job(symbols):
             print(f"[{datetime.now().isoformat()}] Analyzing {symbol}...")
             klines_data = await get_bybit_klines(symbol)
             
-            # --- VALIDACIÓN DE DATOS PARA CÁLCULO ---
-            min_required_klines = max(20, 50, 14) + 1 # El +1 es porque RSI necesita diff entre 2 puntos
+            min_required_klines = max(20, 50, 14) + 1 
             if not klines_data or len(klines_data) < min_required_klines:
                 print(f"[{datetime.now().isoformat()}] Insufficient data for {symbol}. Needed {min_required_klines}, got {len(klines_data) if klines_data else 0}. Skipping analysis.")
-                # Si no hay suficientes datos para calcular, asigna HOLD y N/A
                 current_overall_rec = 'hold'
                 individual_recs = {'sma': 'N/A', 'rsi': 'N/A', 'bb': 'N/A'}
-                current_price = klines_data[-1]['y'] if klines_data and len(klines_data) > 0 else 0.0 # Intentar obtener el último precio si hay datos
+                current_price = klines_data[-1]['y'] if klines_data and len(klines_data) > 0 else 0.0
             else:
                 closing_prices = [p['y'] for p in klines_data]
                 current_price = closing_prices[-1]
@@ -341,7 +334,7 @@ async def scheduled_analysis_job(symbols):
                     has_significant_price_change = percentage_change >= PRICE_CHANGE_THRESHOLD
                     print(f"  {symbol}: % cambio precio: {(percentage_change*100):.2f}% (Umbral: {PRICE_CHANGE_THRESHOLD*100:.0f}%), Tiempo pasado: {has_time_passed}")
                 else: 
-                     has_significant_price_change = True # Si no hay precio guardado o es 0, siempre guardar si es la primera vez.
+                     has_significant_price_change = True 
 
                 if has_time_passed or has_significant_price_change:
                     should_save = True
@@ -458,18 +451,22 @@ async def get_latest_analysis(symbol):
         return jsonify(current_analysis_cache[symbol]), 200
     
     # Si no está en cache o no hay klines, intentar obtenerlos (esto es síncrono para la ruta, lo ideal es que la cache ya esté llena por el scheduler)
-    print(f"[{datetime.now().isoformat()}] Cache miss for {symbol}, trying to fetch live.")
+    print(f"[{datetime.now().isoformat()}] Cache miss for {symbol}, trying to fetch live. (This should be rare if scheduler runs)")
     try:
         klines_data = await get_bybit_klines(symbol)
         
-        if not klines_data or len(klines_data) < max(20, 50, 14) + 1:
+        # --- VALIDACIÓN DE DATOS PARA CÁLCULO (Duplicado del scheduler, pero necesario si el cache falla) ---
+        min_required_klines = max(20, 50, 14) + 1 
+        if not klines_data or len(klines_data) < min_required_klines:
             print(f"[{datetime.now().isoformat()}] Insufficient data for {symbol} on live fetch for frontend. Returning empty.")
+            # Devolver una estructura vacía o con N/A para que el frontend no falle
             return jsonify({
                 'overall_rec': 'hold', 'sma': 'N/A', 'rsi': 'N/A', 'bb': 'N/A',
                 'klines': [], 'sma_short': [], 'sma_long': [], 'bb_bands': {'middle':[],'upper':[],'lower':[]}, 'rsi_data': []
             }), 200
         
         closing_prices = [p['y'] for p in klines_data]
+
         sma_short = calculate_sma(closing_prices, 20)
         sma_long = calculate_sma(closing_prices, 50)
         bollinger_bands = calculate_bollinger_bands(closing_prices, 20, 2)
@@ -500,14 +497,13 @@ async def get_latest_analysis(symbol):
 scheduler = BackgroundScheduler()
 
 # LISTA DE SÍMBOLOS A MONITOREAR (¡Necesitas que esta lista coincida con tu frontend o se cargue de alguna manera!)
-# Para simplificar, usamos una sub-selección de las criptos del frontend.
 SYMBOLS_TO_MONITOR = [
     "BTCUSDT", "ETHUSDT", "BNBUSDT", "XRPUSDT", "SOLUSDT", "ADAUSDT", 
     "DOGEUSDT", "SHIBUSDT", "DOTUSDT", "LTCUSDT", "LINKUSDT", "MATICUSDT",
     "TRXUSDT", "AVAXUSDT", "UNIUSDT", "FILUSDT", "ICPUSDT", "APTUSDT", 
     "SUIUSDT", "NEARUSDT", "ATOMUSDT", "ARBUSD", "OPUSDT", "IMXUSDT",
     "AAVEUSDT", "ALGOUSDT", "FTMUSDT", "VETUSDT", "CHZUSDT", "GRTUSDT",
-    "AXSUSDT", "EOSUSDT", "KLAYUSDT", "SANDUSDT", "MANAUSDT",
+    "AXSUSDT", "EOSUSDT", "SANDUSDT", "MANAUSDT",
 ]
 
 # Añadir la tarea programada: Ejecuta 'scheduled_analysis_job' cada 2 minutos
@@ -532,22 +528,16 @@ def initialize_app():
 
 
 if __name__ == '__main__':
-    # Para la ejecución local, necesitamos un loop de eventos de asyncio
-    # y ejecutar el scheduler explícitamente si no es por gunicorn
     print("Running Flask app in __main__ block (for local development).")
     
-    # Configurar el loop de eventos de asyncio para el contexto local
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
     
-    # Esto asegura que el scheduler inicie y se mantenga vivo localmente
     if not scheduler.running:
         scheduler.start()
         print("Scheduler started locally.")
-        # Opcional: Ejecutar la tarea una vez al inicio local
-        # asyncio.run(scheduled_analysis_job(SYMBOLS_TO_MONITOR))
-
+        
     app.run(debug=True, host='0.0.0.0', port=5000, use_reloader=False) # use_reloader=False para no doble-iniciar scheduler
