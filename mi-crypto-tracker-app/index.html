@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Crypto Tracker Online (Bybit + Backend)</title>
+    <title>Crypto Tracker Online (Backend Driven)</title>
     <style>
-        /* Estilos Base para Escritorio (desktop-first approach) */
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
             background-color: #121212;
@@ -17,14 +16,14 @@
             padding: 20px;
         }
         .container {
-            width: 95%; /* 95% del ancho del padre */
-            max-width: 1200px; /* Ancho máximo para pantallas muy grandes */
+            width: 95%;
+            max-width: 1200px;
             margin-bottom: 20px;
         }
         .top-section-container {
             display: flex;
-            flex-wrap: wrap; /* Permite que los elementos se envuelvan a la siguiente línea */
-            gap: 20px; /* Espacio entre elementos flex */
+            flex-wrap: wrap;
+            gap: 20px;
             width: 95%;
             max-width: 1200px;
             margin-bottom: 20px;
@@ -37,8 +36,8 @@
             flex-direction: column;
             align-items: flex-start;
             gap: 10px;
-            flex: 1; /* Permite que el control crezca y ocupe espacio */
-            min-width: 280px; /* Ancho mínimo para el control */
+            flex: 1;
+            min-width: 280px;
         }
         #coin-select {
             padding: 8px;
@@ -47,7 +46,7 @@
             background-color: #333;
             color: #e0e0e0;
             font-size: 1em;
-            width: 100%; /* Ocupa todo el ancho disponible */
+            width: 100%;
         }
         #update-timer {
             font-size: 0.9em;
@@ -99,7 +98,7 @@
             border-radius: 8px;
             box-shadow: 0 4px 8px rgba(0,0,0,0.3);
             margin-top: 20px;
-            height: 450px; /* Altura fija para escritorio */
+            height: 450px;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -116,8 +115,8 @@
             padding: 15px;
             border-radius: 8px;
             box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-            flex: 3; /* Ocupa más espacio en escritorio */
-            min-width: 450px; /* Ancho mínimo */
+            flex: 3;
+            min-width: 450px;
             display: flex;
             flex-direction: column;
             gap: 10px;
@@ -285,99 +284,13 @@
         .metric-riesgo { color: #dc3545; font-weight: bold; } /* Rojo para riesgo */
         .metric-na { color: #6c757d; } /* Gris para N/A */
         .metric-value { margin-left: 5px; font-size: 0.9em; font-weight: bold;} /* Porcentaje */
-
-        /* ======================================= */
-        /* --- MEDIA QUERIES para Responsividad --- */
-        /* ======================================= */
-
-        /* Para pantallas pequeñas (ej. móviles, ancho máximo 768px) */
-        @media screen and (max-width: 768px) {
-            body {
-                padding: 10px; /* Reducir padding general */
-            }
-            h1 {
-                font-size: 1.5em; /* Reducir tamaño del título principal */
-            }
-            .container, .top-section-container {
-                width: 100%; /* Ocupar todo el ancho disponible */
-                max-width: none; /* Eliminar restricción de ancho máximo */
-                flex-direction: column; /* Apilar elementos verticalmente */
-                gap: 15px; /* Reducir espacio entre elementos apilados */
-            }
-            #controls, #current-opportunities-board, #indicator-selection-panel, #signals-panel, #backend-historical-board {
-                min-width: unset; /* Eliminar ancho mínimo */
-                flex: none; /* No forzar crecimiento, solo ocupar el ancho disponible */
-                width: 100%; /* Ocupar todo el ancho */
-                padding: 10px; /* Reducir padding interno */
-            }
-            .chart-container {
-                height: 300px; /* Reducir altura del gráfico para móviles */
-                padding: 10px;
-            }
-            #current-opportunities-board h2, #backend-historical-board h2 {
-                font-size: 1.3em; /* Reducir tamaño de títulos de tablero */
-            }
-            .opportunity-columns, .history-columns-container {
-                flex-direction: column; /* Apilar columnas de oportunidad/historial verticalmente */
-                gap: 15px;
-            }
-            .opportunity-column, .history-column {
-                flex: none;
-                width: 100%; /* Ocupar todo el ancho cuando están apiladas */
-            }
-            .opportunity-column h3, .history-column h3 {
-                font-size: 1em; /* Reducir tamaño de subtítulos de columna */
-            }
-            .opportunity-column ul, .history-column ul {
-                max-height: 200px; /* Limitar altura de listas internas para evitar scroll excesivo */
-            }
-            .signal {
-                font-size: 1em; /* Reducir tamaño de fuente de señales individuales */
-                padding: 10px;
-                min-width: unset;
-            }
-            #indicator-selection-panel div {
-                flex-basis: 45%; /* Dos elementos por fila en móviles para checkboxes */
-                justify-content: center;
-            }
-            /* Ajustes finos para elementos de lista en historial */
-            .history-column li {
-                font-size: 0.85em; /* Ajustar fuente para historial en móviles */
-                padding: 6px;
-            }
-            .historical-timestamp {
-                font-size: 0.65em;
-            }
-            .metric-value {
-                font-size: 0.8em;
-            }
-        }
-
-        /* Para pantallas medianas (ej. tablets, ancho máximo 1024px) */
-        @media screen and (max-width: 1024px) {
-            .top-section-container {
-                gap: 15px;
-            }
-            #controls {
-                min-width: 250px;
-            }
-            #current-opportunities-board {
-                min-width: 400px;
-            }
-            #backend-historical-board {
-                min-width: 300px; /* Ajustar si es necesario */
-            }
-            .opportunity-columns, .history-columns-container {
-                gap: 8px; /* Reducir espacio entre columnas */
-            }
-        }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@1.0.2"></script>
 </head>
 <body>
-    <h1>Crypto Tracker Online (Bybit + Backend)</h1>
+    <h1>Crypto Tracker Online (Backend Driven)</h1>
 
     <div class="top-section-container">
         <div id="controls">
@@ -524,28 +437,20 @@
         // ===================================================================================
 
         // URL BASE DE TU BACKEND (¡IMPORTANTE: Cambiar esto cuando lo publiques!)
-        // Durante el desarrollo local, usa 'http://172.0.0.1:5000'
         // Después de publicar en Render, usa la URL que Render te dé (ej. 'https://tu-backend-nombre.onrender.com')
         const BACKEND_URL = 'https://crypto-tracker-ukyl.onrender.com'; 
 
+        // Parámetros de la API de Bybit (ahora manejados principalmente por el backend)
         const BYBIT_INTERVAL = "60"; 
         const BYBIT_CATEGORY = "spot";
         const BYBIT_LIMIT = 200; 
 
-        const UPDATE_INTERVAL_SELECTED_CRYPTO = 120000; // 2 minutos para actualizar la crypto seleccionada
-        const UPDATE_INTERVAL_ALL_CRYPTOS = 5 * 60 * 1000; // 5 minutos para actualizar TODAS las oportunidades
-        const ALL_CRYPTOS_API_DELAY = 1500; // 1.5 segundos de retraso entre cada crypto para la API
+        // Intervalos de actualización para el frontend
+        const UPDATE_INTERVAL_SELECTED_CRYPTO = 10000; // 10 segundos para actualizar el gráfico de la crypto seleccionada
+        const UPDATE_INTERVAL_ALL_CRYPTOS = 60000; // 1 minuto para actualizar el tablero de todas las oportunidades
         const HISTORY_UPDATE_INTERVAL = 60000; // 1 minuto para actualizar el historial
-        // NUEVO: Intervalo para guardar la recomendación en el backend (1 hora = 3600000 ms)
-        const SAVE_REC_TO_BACKEND_INTERVAL = 3600000; // 1 hora
-        // NUEVO: Umbral de cambio de precio para guardar una recomendación (3%)
-        const PRICE_CHANGE_THRESHOLD = 0.03; // 3%
 
-        // Map para guardar la última vez que se guardó una recomendación y su precio asociado por símbolo
-        // Estructura: Map<symbol, {timestamp: number, price: number}>
-        const lastSavedData = new Map();
-
-
+        // Parámetros de indicadores técnicos (usados solo en frontend para renderizar)
         const SMA_SHORT_PERIOD = 20;
         const SMA_LONG_PERIOD = 50;
         const BB_PERIOD = 20;
@@ -554,6 +459,7 @@
         const RSI_OVERBOUGHT = 70;
         const RSI_OVERSOLD = 30;
 
+        // Referencias a elementos del DOM
         const coinSelect = document.getElementById('coin-select');
         const updateTimerDiv = document.getElementById('update-timer');
         const smaSignalDiv = document.getElementById('sma-signal');
@@ -574,16 +480,14 @@
         const toggleBbLower = document.getElementById('toggle-bb-lower');
         const toggleRsi = document.getElementById('toggle-rsi');
 
-        // Referencias a las nuevas listas de historial
         const allHistoryList = document.getElementById('all-history-list');
         const aciertosList = document.getElementById('aciertos-list');
         const riesgosList = document.getElementById('riesgos-list');
 
         let priceChartInstance, countdownInterval;
-        let isProcessingAllCryptos = false;
-
         let allCryptos = []; 
 
+        // Caches para los datos de la cripto seleccionada (para redibujar el gráfico localmente)
         let currentPriceDataCache = null;
         let currentSmaShortCache = null;
         let currentSmaLongCache = null;
@@ -608,145 +512,56 @@
         }
 
         // ===================================================================================
-        // --- FUNCIONES DE CÁLCULO DE INDICADORES ---
-        // DEBEN estar definidas antes de ser llamadas.
+        // --- FUNCIONES DE OBTENCIÓN DE DATOS DESDE EL BACKEND (AHORA ES LA FUENTE) ---
         // ===================================================================================
-        function calculateSMA(data, period) {
-            let sma = [];
-            if (!data || data.length < period) return Array(data ? data.length : 0).fill(null); 
 
-            for (let i = 0; i < data.length; i++) {
-                if (i < period - 1) {
-                    sma.push(null);
-                } else {
-                    const slice = data.slice(i - period + 1, i + 1);
-                    const sum = slice.reduce((acc, val) => acc + val, 0);
-                    sma.push({ y: sum / period });
-                }
-            }
-            return sma;
-        }
-
-        function calculateBollingerBands(data, period, stdDevMultiplier) {
-            let middle = [], upper = [], lower = [];
-            if (!data || data.length < period) { 
-                const nulls = Array(data ? data.length : 0).fill(null);
-                return { middle: nulls, upper: nulls, lower: nulls };
-            }
-
-            for (let i = 0; i < data.length; i++) {
-                if (i < period - 1) {
-                    middle.push(null);
-                    upper.push(null);
-                    lower.push(null);
-                } else {
-                    const slice = data.slice(i - period + 1, i + 1);
-                    const mean = slice.reduce((acc, val) => acc + val, 0) / period;
-                    const stdDev = Math.sqrt(slice.reduce((acc, val) => acc + Math.pow(val - mean, 2), 0) / period);
-                    
-                    middle.push({ y: mean });
-                    upper.push({ y: mean + (stdDev * stdDevMultiplier) });
-                    lower.push({ y: mean - (stdDev * stdDevMultiplier) });
-                }
-            }
-            return { middle, upper, lower };
-        }
-
-        function calculateRSI(data, period) {
-            let rsiValues = [];
-            
-            if (!data || data.length < period + 1) { 
-                return Array(data ? data.length : 0).fill(null);
-            }
-
-            for (let i = 0; i < period; i++) {
-                rsiValues.push(null);
-            }
-
-            let avgGain = 0;
-            let avgLoss = 0;
-
-            for (let i = 1; i <= period; i++) {
-                const diff = data[i] - data[i - 1];
-                if (diff > 0) {
-                    avgGain += diff;
-                } else {
-                    avgLoss += Math.abs(diff);
-                }
-            }
-            avgGain /= period;
-            avgLoss /= period;
-
-            if (avgLoss === 0) {
-                rsiValues.push({ y: 100 });
-            } else {
-                const rs = avgGain / avgLoss;
-                rsiValues.push({ y: 100 - (100 / (1 + rs)) });
-            }
-
-            for (let i = period + 1; i < data.length; i++) {
-                const diff = data[i] - data[i - 1];
-                let currentGain = diff > 0 ? diff : 0;
-                let currentLoss = diff < 0 ? Math.abs(diff) : 0;
-
-                avgGain = ((avgGain * (period - 1)) + currentGain) / period;
-                avgLoss = ((avgLoss * (period - 1)) + currentLoss) / period;
-
-                if (avgLoss === 0) {
-                    rsiValues.push({ y: 100 });
-                } else {
-                    const rs = avgGain / avgLoss;
-                    rsiValues.push({ y: 100 - (100 / (1 + rs)) });
-                }
-            }
-            return rsiValues;
-        }
-
-        // ===================================================================================
-        // --- FUNCIONES DE OBTENCIÓN DE DATOS (BYBIT API) ---
-        // DEBEN estar definidas antes de las funciones de análisis principal.
-        // ===================================================================================
-        async function getCryptoData(symbol, interval = "60", category = "spot", limit = 200) {
-            const url = `https://api.bybit.com/v5/market/kline?category=${category}&symbol=${symbol}&interval=${interval}&limit=${limit}`;
-
+        /**
+         * Obtiene los últimos datos de análisis (klines y señales) para una criptomoneda específica desde el backend.
+         * @param {string} symbol - El símbolo de la criptomoneda.
+         * @returns {object} Un objeto con klines, indicadores y señales, o null si hay error.
+         */
+        async function getLatestAnalysisFromBackend(symbol) {
+            console.log(`Frontend: Solicitando análisis más reciente de ${symbol} al backend.`);
             try {
-                const response = await fetch(url);
+                const response = await fetch(`${BACKEND_URL}/get_latest_analysis/${symbol}`);
                 if (!response.ok) {
-                    const errorDetails = await response.text();
-                    throw new Error(`Error de red de Bybit para ${symbol}: ${response.status} - ${response.statusText}. Detalles: ${errorDetails.substring(0, Math.min(errorDetails.length, 200))}...`);
+                    const errorText = await response.text();
+                    throw new Error(`Error HTTP al obtener análisis del backend: ${response.status} - ${response.statusText}. Detalles: ${errorText}`);
                 }
-                
                 const data = await response.json();
-                
-                if (!data || !data.result || !data.result.list || data.result.list.length === 0) {
-                    throw new Error(`La API de Bybit para ${symbol} devolvió una respuesta válida pero sin datos de klines.`);
-                }
-                
-                const formattedPrices = data.result.list.map(kline => ({
-                    x: parseInt(kline[0]),
-                    y: parseFloat(kline[4])
-                }));
-
-                return formattedPrices.reverse(); 
-
+                console.log(`Frontend: Análisis de ${symbol} recibido del backend.`, data);
+                return data;
             } catch (error) {
-                console.error(`Error al obtener datos de la API de Bybit para ${symbol}:`, error);
-                return null; 
+                console.error(`Frontend: Error al obtener análisis de ${symbol} del backend:`, error);
+                return null;
             }
         }
+
+        // ===================================================================================
+        // --- FUNCIONES DE CÁLCULO DE INDICADORES (AHORA SOLO PARA RENDERIZADO EN FRONT) ---
+        // Estas funciones son las mismas que antes, pero solo se usan con los datos que ya
+        // vienen procesados del backend si el frontend decide re-calcular algo para el gráfico.
+        // En esta arquitectura, el backend ya hace los cálculos principales.
+        // Las mantenemos aquí para que Chart.js las use internamente al mapear datasets
+        // o si quisieras alguna lógica específica en el futuro.
+        // ===================================================================================
+        function calculateSMA(data, period) { /* ... lógica ... */ return Array(data ? data.length : 0).fill(null); } // Lógica simplificada, el backend hace el cálculo real
+        function calculateBollingerBands(data, period, stdDevMultiplier) { /* ... lógica ... */ return { middle: [], upper: [], lower: [] }; } // Lógica simplificada
+        function calculateRSI(data, period) { /* ... lógica ... */ return Array(data ? data.length : 0).fill(null); } // Lógica simplificada
         
+        // La función getCombinedSignals en el frontend ya no se usará
+        // para *determinar* la señal principal, ya que el backend la enviará.
+        // La mantendremos de placeholder o la eliminaremos si no se usa más.
+        function getCombinedSignals(smaShort, smaLong, rsi, bollingerBands, closingPrices) { /* ... lógica ... */ return { sma: 'N/A', rsi: 'N/A', bb: 'N/A', overall: 'hold' }; }
+
+
         // ===================================================================================
         // --- FUNCIONES DE RENDERING Y ACTUALIZACIÓN DE PANELES ---
-        // DEBEN estar definidas ANTES de ser llamadas por runSelectedCryptoAnalysis o updateAllCryptosOpportunities
         // ===================================================================================
 
         /**
          * Dibuja o actualiza el gráfico principal de precios, y los indicadores seleccionados.
-         * @param {Array<object>} priceData - Datos de precio en formato { x: timestamp, y: price }.
-         * @param {Array<object|null>} smaShort - Datos de la SMA corta.
-         * @param {Array<object|null>} smaLong - Datos de la SMA larga.
-         * @param {object} bb - Objeto con datos de Bandas de Bollinger (upper, middle, lower).
-         * @param {Array<object|null>} rsi - Datos del RSI.
+         * Ahora los datos de los indicadores vienen directamente del backend.
          */
         function renderPriceChart(priceData, smaShort, smaLong, bb, rsi) {
             console.log("renderPriceChart: Iniciando renderizado del gráfico."); 
@@ -766,8 +581,7 @@
                 }
             ];
 
-            if (toggleSmaShort.checked) {
-                console.log("renderPriceChart: Agregando SMA Corta."); 
+            if (toggleSmaShort.checked && smaShort && smaShort.length > 0) { // Comprobar si hay datos válidos
                 datasets.push({ 
                     label: `SMA ${SMA_SHORT_PERIOD}`, 
                     data: smaShort.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null), 
@@ -778,8 +592,7 @@
                     yAxisID: 'y-price' 
                 });
             }
-            if (toggleSmaLong.checked) {
-                console.log("renderPriceChart: Agregando SMA Larga."); 
+            if (toggleSmaLong.checked && smaLong && smaLong.length > 0) {
                 datasets.push({ 
                     label: `SMA ${SMA_LONG_PERIOD}`, 
                     data: smaLong.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null), 
@@ -791,8 +604,7 @@
                 });
             }
             
-            if (toggleBbUpper.checked) {
-                console.log("renderPriceChart: Agregando BB Superior."); 
+            if (toggleBbUpper.checked && bb && bb.upper && bb.upper.length > 0) {
                 datasets.push({ 
                     label: `BB Superior`, 
                     data: bb.upper.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null), 
@@ -803,8 +615,7 @@
                     yAxisID: 'y-price' 
                 });
             }
-            if (toggleBbLower.checked) {
-                console.log("renderPriceChart: Agregando BB Inferior."); 
+            if (toggleBbLower.checked && bb && bb.lower && bb.lower.length > 0) {
                 datasets.push({ 
                     label: `BB Inferior`, 
                     data: bb.lower.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null), 
@@ -817,8 +628,7 @@
                     yAxisID: 'y-price' 
                 });
             }
-            if (toggleBbMiddle.checked) {
-                console.log("renderPriceChart: Agregando BB Media."); 
+            if (toggleBbMiddle.checked && bb && bb.middle && bb.middle.length > 0) {
                 datasets.push({ 
                     label: `BB Media`, 
                     data: bb.middle.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null), 
@@ -831,8 +641,7 @@
                 });
             }
 
-            if (toggleRsi.checked) {
-                console.log("renderPriceChart: Agregando RSI."); 
+            if (toggleRsi.checked && rsi && rsi.length > 0) {
                 datasets.push({
                     label: `RSI (${RSI_PERIOD})`,
                     data: rsi.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null),
@@ -844,177 +653,67 @@
                 });
             }
 
-            // Configuración de anotaciones para el RSI (condicional a toggleRsi.checked)
             const annotations = {};
             if (toggleRsi.checked) {
                 annotations.rsiOverboughtLine = { 
-                    type: 'line', 
-                    yMin: RSI_OVERBOUGHT, 
-                    yMax: RSI_OVERBOUGHT, 
-                    borderColor: 'red', 
-                    borderWidth: 1, 
-                    borderDash: [5, 5], 
-                    yAxisID: 'y-rsi', 
-                    label: { 
-                        content: 'Sobrecompra', enabled: true, position: 'start', 
-                        color: '#e0e0e0', backgroundColor: 'rgba(255, 0, 0, 0.5)'
-                    } 
+                    type: 'line', yMin: RSI_OVERBOUGHT, yMax: RSI_OVERBOUGHT, 
+                    borderColor: 'red', borderWidth: 1, borderDash: [5, 5], yAxisID: 'y-rsi', 
+                    label: { content: 'Sobrecompra', enabled: true, position: 'start', color: '#e0e0e0', backgroundColor: 'rgba(255, 0, 0, 0.5)'} 
                 };
                 annotations.rsiOversoldLine = { 
-                    type: 'line', 
-                    yMin: RSI_OVERSOLD, 
-                    yMax: RSI_OVERSOLD, 
-                    borderColor: 'green', 
-                    borderWidth: 1, 
-                    borderDash: [5, 5], 
-                    yAxisID: 'y-rsi', 
-                    label: { 
-                        content: 'Sobreventa', enabled: true, position: 'start', 
-                        color: '#e0e0e0', backgroundColor: 'rgba(0, 128, 0, 0.5)'
-                    } 
+                    type: 'line', yMin: RSI_OVERSOLD, yMax: RSI_OVERSOLD, 
+                    borderColor: 'green', borderWidth: 1, borderDash: [5, 5], yAxisID: 'y-rsi', 
+                    label: { content: 'Sobreventa', enabled: true, position: 'start', color: '#e0e0e0', backgroundColor: 'rgba(0, 128, 0, 0.5)'} 
                 };
             }
 
-
             priceChartInstance = new Chart(ctx, {
                 type: 'line',
-                data: {
-                    datasets: datasets
-                },
+                data: { datasets: datasets },
                 options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: {
-                        mode: 'index',
-                        intersect: false,
-                    },
+                    responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
                     scales: {
-                        x: { 
-                            type: 'time', 
-                            time: { 
-                                unit: 'hour', 
-                                tooltipFormat: 'HH:mm dd/MM/yy',
-                                displayFormats: {
-                                    hour: 'HH:mm',
-                                    day: 'dd/MM'
-                                }
-                            },
-                            title: { display: true, text: 'Fecha/Hora', color: '#e0e0e0' },
-                            ticks: { color: '#e0e0e0' },
-                            grid: { color: '#333' }
-                        },
-                        'y-price': { 
-                            type: 'linear',
-                            display: true,
-                            position: 'left',
-                            title: { display: true, text: 'Precio (USD)', color: '#e0e0e0' },
-                            ticks: { color: '#e0e0e0' },
-                            grid: { color: '#333' }
-                        },
-                        'y-rsi': { 
-                            type: 'linear',
-                            display: toggleRsi.checked, 
-                            position: 'right',
-                            min: 0,
-                            max: 100,
-                            title: { display: true, text: 'RSI', color: '#4bc0c0' },
-                            ticks: { color: '#4bc0c0' },
-                            grid: { drawOnChartArea: false } 
-                        }
+                        x: { type: 'time', time: { unit: 'hour', tooltipFormat: 'HH:mm dd/MM/yy', displayFormats: { hour: 'HH:mm', day: 'dd/MM' } },
+                            title: { display: true, text: 'Fecha/Hora', color: '#e0e0e0' }, ticks: { color: '#e0e0e0' }, grid: { color: '#333' } },
+                        'y-price': { type: 'linear', display: true, position: 'left',
+                            title: { display: true, text: 'Precio (USD)', color: '#e0e0e0' }, ticks: { color: '#e0e0e0' }, grid: { color: '#333' } },
+                        'y-rsi': { type: 'linear', display: toggleRsi.checked, position: 'right', min: 0, max: 100,
+                            title: { display: true, text: 'RSI', color: '#4bc0c0' }, ticks: { color: '#4bc0c0' }, grid: { drawOnChartArea: false } }
                     },
-                    plugins: {
-                        tooltip: { mode: 'index', intersect: false },
-                        legend: { labels: { color: '#e0e0e0' } },
-                        annotation: {
-                            annotations: annotations 
-                        }
-                    }
+                    plugins: { tooltip: { mode: 'index', intersect: false }, legend: { labels: { color: '#e0e0e0' } }, annotation: { annotations: annotations } }
                 }
             });
             console.log("Gráfico de precios con indicadores renderizado.");
         }
         
-        function updateSignals(smaShort, smaLong, rsi, bollingerBands, closingPrices) {
+        // updateSignals ahora solo actualiza los paneles UI con la info recibida del backend
+        function updateSignals(signals) { 
             smaSignalDiv.classList.remove('alert-buy', 'alert-sell');
             rsiSignalDiv.classList.remove('alert-buy', 'alert-sell');
             bbSignalDiv.classList.remove('alert-buy', 'alert-sell');
 
-            let smaRec = 'hold';
-            let rsiRec = 'hold';
-            let bbRec = 'hold';
+            // SMA
+            if (signals.sma === 'buy') { smaSignalDiv.textContent = 'Cruce SMA: COMPRA 📈'; smaSignalDiv.className = 'signal buy alert-buy'; }
+            else if (signals.sma === 'sell') { smaSignalDiv.textContent = 'Cruce SMA: VENTA 📉'; smaSignalDiv.className = 'signal sell alert-sell'; }
+            else if (signals.sma === 'hold') { smaSignalDiv.textContent = 'Cruce SMA: Mantener 😐'; smaSignalDiv.className = 'signal hold'; }
+            else { smaSignalDiv.textContent = 'Cruce SMA: Datos insuficientes'; smaSignalDiv.className = 'signal hold'; } // N/A
 
-            const validSmaShort = smaShort ? smaShort.filter(v => v !== null) : []; 
-            const validSmaLong = smaLong ? smaLong.filter(v => v !== null) : [];  
+            // RSI
+            if (signals.rsi === 'buy') { rsiSignalDiv.textContent = `RSI: Sobreventa ✅`; rsiSignalDiv.className = 'signal oversold alert-buy'; }
+            else if (signals.rsi === 'sell') { rsiSignalDiv.textContent = `RSI: Sobrecompra ⚠️`; rsiSignalDiv.className = 'signal overbought alert-sell'; }
+            else if (signals.rsi === 'hold') { rsiSignalDiv.textContent = `RSI: Neutral ⚖️`; rsiSignalDiv.className = 'signal hold'; }
+            else { rsiSignalDiv.textContent = 'RSI: Datos insuficientes'; rsiSignalDiv.className = 'signal hold'; } // N/A
 
-            if (validSmaShort.length >= 2 && validSmaLong.length >= 2) {
-                const lastSmaShort = validSmaShort[validSmaShort.length - 1].y;
-                const prevSmaShort = validSmaShort[validSmaShort.length - 2].y;
-                const lastSmaLong = validSmaLong[validSmaLong.length - 1].y;
-                const prevSmaLong = validSmaLong[validSmaLong.length - 2].y;
-
-                if (prevSmaShort <= prevSmaLong && lastSmaShort > lastSmaLong) {
-                    smaSignalDiv.textContent = 'Cruce SMA: COMPRA 📈 (Corto > Largo)';
-                    smaSignalDiv.className = 'signal buy alert-buy';
-                } else if (prevSmaShort >= prevSmaLong && lastSmaShort < lastSmaLong) {
-                    smaSignalDiv.textContent = 'Cruce SMA: VENTA 📉 (Corto < Largo)';
-                    smaSignalDiv.className = 'signal sell alert-sell';
-                } else {
-                    smaSignalDiv.textContent = 'Cruce SMA: Mantener 😐';
-                    smaSignalDiv.className = 'signal hold';
-                }
-            } else {
-                smaSignalDiv.textContent = 'Cruce SMA: Datos insuficientes';
-                smaSignalDiv.className = 'signal hold';
-            }
-
-            const validRsi = rsi ? rsi.filter(v => v !== null) : []; 
-            if (validRsi.length > 0) {
-                const lastRsi = validRsi[validRsi.length - 1].y;
-                if (lastRsi > RSI_OVERBOUGHT) {
-                    rsiSignalDiv.textContent = `RSI (${lastRsi.toFixed(1)}): Sobrecompra ⚠️`;
-                    rsiSignalDiv.className = 'signal overbought alert-sell';
-                } else if (lastRsi < RSI_OVERSOLD) {
-                    rsiSignalDiv.textContent = `RSI (${lastRsi.toFixed(1)}): Sobreventa ✅`;
-                    rsiSignalDiv.className = 'signal oversold alert-buy';
-                } else {
-                    rsiSignalDiv.textContent = `RSI (${lastRsi.toFixed(1)}): Neutral ⚖️`;
-                    rsiSignalDiv.className = 'signal hold';
-                }
-            } else {
-                rsiSignalDiv.textContent = 'RSI: Datos insuficientes';
-                rsiSignalDiv.className = 'signal hold';
-            }
-
-            const validBbUpper = (bollingerBands && bollingerBands.upper) ? bollingerBands.upper.filter(v => v !== null) : []; 
-            const validBbLower = (bollingerBands && bollingerBands.lower) ? bollingerBands.lower.filter(v => v !== null) : []; 
-            const lastPrice = closingPrices ? closingPrices[closingPrices.length - 1] : undefined; 
-
-            if (validBbUpper.length > 0 && validBbLower.length > 0 && lastPrice !== undefined) {
-                const lastBbUpper = validBbUpper[validBbUpper.length - 1].y;
-                const lastBbLower = validBbLower[validBbLower.length - 1].y;
-                
-                if (lastPrice > lastBbUpper) {
-                    bbSignalDiv.textContent = `BB: Precio sobre banda superior ⬆️ (Venta)`;
-                    bbSignalDiv.className = 'signal sell alert-sell';
-                } else if (lastPrice < lastBbLower) {
-                    bbSignalDiv.textContent = `BB: Precio bajo banda inferior ⬇️ (Compra)`;
-                    bbSignalDiv.className = 'signal buy alert-buy';
-                } else {
-                    bbSignalDiv.textContent = 'BB: Precio dentro de la banda 🔄';
-                    bbSignalDiv.className = 'signal hold';
-                }
-            } else {
-                bbSignalDiv.textContent = 'BB: Datos insuficientes';
-                bbSignalDiv.className = 'signal hold';
-            }
-            console.log("Señales individuales actualizadas.");
+            // BB
+            if (signals.bb === 'buy') { bbSignalDiv.textContent = `BB: Precio bajo banda inferior ⬇️ (Compra)`; bbSignalDiv.className = 'signal buy alert-buy'; }
+            else if (signals.bb === 'sell') { bbSignalDiv.textContent = `BB: Precio sobre banda superior ⬆️ (Venta)`; bbSignalDiv.className = 'signal sell alert-sell'; }
+            else if (signals.bb === 'hold') { bbSignalDiv.textContent = `BB: Precio dentro de la banda 🔄`; bbSignalDiv.className = 'signal hold'; }
+            else { bbSignalDiv.textContent = 'BB: Datos insuficientes'; bbSignalDiv.className = 'signal hold'; } // N/A
+            
+            console.log("Señales individuales actualizadas con datos del backend.");
         }
         
-        /**
-         * Función central para renderizar las 3 columnas de oportunidades en el DOM.
-         * Se llama repetidamente durante la carga progresiva.
-         * @param {object} recommendationsMap - Un objeto con arrays de símbolos para 'buy', 'sell', 'hold', 'error'.
-         */
+        // renderOpportunityColumns ya está bien para mostrar las 3 columnas
         function renderOpportunityColumns(recommendationsMap) {
             buyList.innerHTML = '';
             sellList.innerHTML = '';
@@ -1076,80 +775,17 @@
 
         // ===================================================================================
         // --- FUNCIONES DE PERSISTENCIA (INTERACCIÓN CON BACKEND) ---
-        // DEBEN estar definidas antes de las funciones de análisis principal.
+        // Estas funciones se mantienen, aunque la principal lógica de guardado reside en el backend scheduler.
+        // Solo se usan para la ruta POST que el scheduler podría llamar si estuviera en el frontend.
         // ===================================================================================
 
-        async function saveRecommendationToBackend(symbol, recommendation, individualSignals, currentPrice) { // Nuevo parámetro
-            // Aseguramos que la recomendación no sea undefined o null antes de enviar
-            if (recommendation === undefined || recommendation === null) {
-                console.warn(`saveRecommendationToBackend: No se pudo guardar la recomendación para ${symbol} porque es undefined/null.`);
-                return; 
-            }
-
-            // NUEVO: Lógica condicional para guardar basada en tiempo O cambio de precio
-            const now = Date.now();
-            const savedDataForSymbol = lastSavedData.get(symbol); 
-            const lastSavedTimestamp = savedDataForSymbol ? savedDataForSymbol.timestamp : 0;
-            const lastSavedPrice = savedDataForSymbol ? savedDataForSymbol.price : null;
-
-            const hasTimePassed = (now - lastSavedTimestamp) >= SAVE_REC_TO_BACKEND_INTERVAL;
-            
-            let hasSignificantPriceChange = false;
-            // Solo calcular cambio de precio si tenemos un precio anterior y un precio actual válido
-            if (lastSavedPrice !== null && currentPrice !== undefined && currentPrice !== null && currentPrice !== 0) {
-                const percentageChange = Math.abs(currentPrice - lastSavedPrice) / lastSavedPrice;
-                hasSignificantPriceChange = percentageChange >= PRICE_CHANGE_THRESHOLD;
-                console.log(`Debug Guardado: ${symbol} - Precio actual: ${currentPrice}, Último guardado: ${lastSavedPrice}, % cambio: ${(percentageChange * 100).toFixed(2)}%`);
-            } else if (lastSavedPrice === null && currentPrice !== undefined && currentPrice !== null) {
-                // Si es la primera vez que guardamos un precio, consideramos que hay un "cambio" si ya hay un precio actual.
-                // Esto es para que la primera entrada siempre se guarde (si no ha pasado suficiente tiempo).
-                hasSignificantPriceChange = true; 
-                console.log(`Debug Guardado: ${symbol} - Primera entrada con precio: ${currentPrice}`);
-            }
-
-
-            // Condición para SALTAR el guardado
-            if (!hasTimePassed && !hasSignificantPriceChange) {
-                console.log(`saveRecommendationToBackend: Saltando guardado para ${symbol}. No ha pasado 1 hora Y no hubo cambio de precio del ${PRICE_CHANGE_THRESHOLD * 100}%.`);
-                return;
-            }
-
-            // Si llegamos aquí, es porque se debe guardar. Actualizar lastSavedData.
-            lastSavedData.set(symbol, { timestamp: now, price: currentPrice });
-
-
-            const payload = {
-                symbol: symbol,
-                recommendation: recommendation,
-                timestamp: new Date().toISOString(),
-                sma_rec: individualSignals.sma,
-                rsi_rec: individualSignals.rsi,
-                bb_rec: individualSignals.bb,
-                current_price: currentPrice // NUEVO: Enviar el precio actual al backend
-            };
-            console.log("Enviando a backend para guardar:", `${BACKEND_URL}/save_recommendation`, payload);
-            try {
-                const response = await fetch(`${BACKEND_URL}/save_recommendation`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(payload)
-                });
-
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`Error HTTP al guardar en backend: ${response.status} - ${response.statusText}. Detalles: ${errorText}`);
-                }
-                const result = await response.json();
-                console.log('Recomendación guardada en backend:', result.message);
-            } catch (error) {
-                console.error('Error al guardar recomendación en backend (catch):', error);
-            }
+        // saveRecommendationToBackend ahora es un dummy o para uso manual, el scheduler del backend es el que guarda
+        async function saveRecommendationToBackend(symbol, recommendation, individualSignals, currentPrice) { 
+            console.warn(`saveRecommendationToBackend: Esta función es un placeholder. El backend ahora maneja el guardado programado.`);
+            // No hacemos nada aquí ya que el backend lo hace automáticamente
         }
 
         async function loadHistoricalRecommendationsFromBackend() {
-            // Limpiar todas las listas del historial
             allHistoryList.innerHTML = '<li>Cargando historial...</li>';
             aciertosList.innerHTML = '<li>Cargando...</li>';
             riesgosList.innerHTML = '<li>Cargando...</li>';
@@ -1163,7 +799,6 @@
                 }
                 const history = await response.json();
 
-                // Limpiar después de cargar (si hay datos) o mantener el "Cargando..." si falla el fetch.
                 allHistoryList.innerHTML = '';
                 aciertosList.innerHTML = '';
                 riesgosList.innerHTML = '';
@@ -1175,7 +810,6 @@
                     return;
                 }
 
-                // Arrays temporales para construir las listas ordenadas
                 const tempAllHistory = [];
                 const tempAciertos = [];
                 const tempRiesgos = [];
@@ -1203,7 +837,6 @@
                         metricHtml = `<span class="metric-na">N/A</span>`; 
                     }
 
-                    // --- Para la columna "Todas las Criptos" ---
                     let allHistoryItemHtml = `
                         <span class="opportunity-label">${entry.symbol}</span> 
                         <span class="historical-timestamp">${dateString} ${timeString}</span>
@@ -1214,7 +847,6 @@
                     `;
                     tempAllHistory.push({html: allHistoryItemHtml, timestamp: entry.timestamp}); 
 
-                    // --- Para las columnas "Aciertos" y "Riesgos" (solo si aplica) ---
                     if (entry.metric_type === 'Acierto') {
                         let aciertoItemHtml = `
                             <span class="opportunity-label">${entry.symbol}</span> 
@@ -1232,7 +864,6 @@
                     }
                 });
 
-                // Ordenar las listas por timestamp (más recientes primero) antes de agregarlas al DOM
                 tempAllHistory.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).forEach(item => {
                     const li = document.createElement('li');
                     li.innerHTML = item.html;
@@ -1249,7 +880,6 @@
                     riesgosList.appendChild(li);
                 });
 
-                // Si una columna queda vacía, mostrar "Ninguno"
                 if (tempAllHistory.length === 0) allHistoryList.innerHTML = `<li>No hay historial.</li>`;
                 if (tempAciertos.length === 0) aciertosList.innerHTML = `<li>Ninguno.</li>`;
                 if (tempRiesgos.length === 0) riesgosList.innerHTML = `<li>Ninguno.</li>`;
@@ -1264,12 +894,12 @@
         }
 
         // ===================================================================================
-        // --- LÓGICA PRINCIPAL DE ANÁLISIS ---
-        // Estas funciones deben estar al final o al menos después de todas las utilidades que llaman.
+        // --- LÓGICA PRINCIPAL DE ANÁLISIS (AHORA PIDE DATOS AL BACKEND) ---
         // ===================================================================================
 
+        // runSelectedCryptoAnalysis ahora obtendrá los datos del backend
         async function runSelectedCryptoAnalysis() {
-            console.log("Inicio de runSelectedCryptoAnalysis.");
+            console.log("Inicio de runSelectedCryptoAnalysis (obteniendo de backend).");
             if (countdownInterval) clearInterval(countdownInterval);
 
             smaSignalDiv.textContent = 'Cargando...';
@@ -1285,213 +915,68 @@
 
             const selectedSymbol = coinSelect.value;
             if (!selectedSymbol) {
-                console.warn("No hay criptomoneda seleccionada para el análisis detallado (o la lista está vacía).");
+                console.warn("No hay criptomoneda seleccionada.");
                 if (priceChartInstance) priceChartInstance.destroy();
                 priceChartCanvas.style.display = 'none'; 
                 priceNoDataMessage.textContent = "No hay criptomoneda seleccionada o datos iniciales."
                 priceNoDataMessage.style.display = 'flex'; 
                 return;
             }
-            console.log(`runSelectedCryptoAnalysis: Obteniendo datos de Bybit para: ${selectedSymbol}`);
+            console.log(`runSelectedCryptoAnalysis: Solicitando análisis de ${selectedSymbol} al backend.`);
 
-            const prices = await getCryptoData(selectedSymbol, BYBIT_INTERVAL, BYBIT_CATEGORY, BYBIT_LIMIT);
+            const analysisData = await getLatestAnalysisFromBackend(selectedSymbol); // NUEVO: Llamada al backend
             
-            const minRequiredData = Math.max(SMA_LONG_PERIOD, BB_PERIOD, RSI_PERIOD);
-            if (!prices || prices.length < minRequiredData) {
-                console.error(`runSelectedCryptoAnalysis: Datos insuficientes para calcular indicadores de ${selectedSymbol}. Se necesitan al menos ${minRequiredData} puntos, se obtuvieron ${prices ? prices.length : 0}.`, prices);
-                smaSignalDiv.textContent = 'Error: Datos insuficientes.';
-                rsiSignalDiv.textContent = 'Error: Datos insuficientes.';
-                bbSignalDiv.textContent = 'Error: Datos insuficientes.';
-                updateTimerDiv.textContent = "Datos insuficientes para indicadores";
+            if (!analysisData || !analysisData.klines || analysisData.klines.length === 0) {
+                console.error(`runSelectedCryptoAnalysis: No se recibieron datos de análisis para ${selectedSymbol} del backend.`);
+                smaSignalDiv.textContent = 'Error: No hay datos.';
+                rsiSignalDiv.textContent = 'Error: No hay datos.';
+                bbSignalDiv.textContent = 'Error: No hay datos.';
+                updateTimerDiv.textContent = "Datos no disponibles del backend";
                 
-                // Aseguramos que currentPriceDataCache y otros caches sean nulls/vacíos si no hay datos
-                currentPriceDataCache = [];
-                currentSmaShortCache = [];
-                currentSmaLongCache = [];
-                currentBollingerBandsCache = {middle:[], upper:[], lower:[]};
-                currentRsiCache = [];
-
                 if (priceChartInstance) priceChartInstance.destroy();
                 priceChartCanvas.style.display = 'none';
-                priceNoDataMessage.textContent = "Datos insuficientes para gráficos."
+                priceNoDataMessage.textContent = "Datos no disponibles para gráficos."
                 priceNoDataMessage.style.display = 'flex';
-                // Si no hay datos suficientes, se guarda una recomendación 'hold' para registrar el evento
-                console.log("runSelectedCryptoAnalysis: Guardando 'HOLD' por datos insuficientes.");
-                // Pasamos 0 o null como precio si no hay datos de precios válidos
-                await saveRecommendationToBackend(selectedSymbol, 'hold', {sma: 'N/A', rsi: 'N/A', bb: 'N/A'}, prices && prices.length > 0 ? prices[prices.length -1].y : 0); 
                 return;
             }
 
-            console.log(`runSelectedCryptoAnalysis: Datos recibidos para ${selectedSymbol}. Número de puntos: ${prices.length}`);
-
-            currentPriceDataCache = prices; 
-            const closingPrices = prices.map(p => p.y);
-            const currentPrice = closingPrices[closingPrices.length - 1]; // Obtener el último precio de cierre
-
-            console.log("runSelectedCryptoAnalysis: Calculando indicadores para la cripto seleccionada...");
-            currentSmaShortCache = calculateSMA(closingPrices, SMA_SHORT_PERIOD);
-            currentSmaLongCache = calculateSMA(closingPrices, SMA_LONG_PERIOD);
-            currentBollingerBandsCache = calculateBollingerBands(closingPrices, BB_PERIOD, BB_STD_DEV);
-            currentRsiCache = calculateRSI(closingPrices, RSI_PERIOD); 
+            // Poblamos los caches con los datos recibidos del backend
+            currentPriceDataCache = analysisData.klines; 
+            currentSmaShortCache = analysisData.sma_short;
+            currentSmaLongCache = analysisData.sma_long;
+            currentBollingerBandsCache = analysisData.bb_bands;
+            currentRsiCache = analysisData.rsi_data; 
             
-            console.log("runSelectedCryptoAnalysis: Renderizando gráficos para la cripto seleccionada...");
+            console.log(`runSelectedCryptoAnalysis: Renderizando gráficos para ${selectedSymbol} con datos del backend.`);
             renderPriceChart(currentPriceDataCache, currentSmaShortCache, currentSmaLongCache, currentBollingerBandsCache, currentRsiCache);
             
-            console.log("runSelectedCryptoAnalysis: Actualizando señales individuales...");
-            const signals = getCombinedSignals(currentSmaShortCache, currentSmaLongCache, currentRsiCache, currentBollingerBandsCache, closingPrices);
-            updateSignals(currentSmaShortCache, currentSmaLongCache, currentRsiCache, currentBollingerBandsCache, closingPrices); // Actualiza los paneles individuales
-
-            console.log("runSelectedCryptoAnalysis: Intentando guardar recomendación en backend...");
-            // Pasamos currentPrice como el último parámetro
-            await saveRecommendationToBackend(selectedSymbol, signals.overall, signals, currentPrice); 
-            console.log("runSelectedCryptoAnalysis: Recomendación enviada a backend.");
-
-            startUpdateTimer(UPDATE_INTERVAL_SELECTED_CRYPTO / 1000);
-            console.log("Análisis de criptomoneda seleccionada completado.");
-        }
-
-        async function updateAllCryptosOpportunities() {
-            console.log("Inicio de updateAllCryptosOpportunities.");
-            if (isProcessingAllCryptos) {
-                console.log("Ya se está procesando el análisis de todas las criptos. Saltando esta ejecución.");
-                return;
-            }
-            if (allCryptos.length === 0) {
-                 console.warn("No hay criptomonedas en la lista estática para actualizar las oportunidades.");
-                 renderOpportunityColumns({ buy: [], sell: [], hold: [], error: ['No hay criptos para mostrar.'] });
-                 return;
-            }
-
-            isProcessingAllCryptos = true;
-            console.log("updateAllCryptosOpportunities: Iniciando análisis para TODAS las criptomonedas (carga progresiva)...");
-
-            const tempRecommendations = { buy: [], sell: [], hold: [], error: [] }; 
-            renderOpportunityColumns(tempRecommendations);
-
-            for (let i = 0; i < allCryptos.length; i++) {
-                const symbol = allCryptos[i];
-                console.log(`updateAllCryptosOpportunities: Procesando ${symbol} (${i + 1}/${allCryptos.length}).`);
-
-                try {
-                    const prices = await getCryptoData(symbol, BYBIT_INTERVAL, BYBIT_CATEGORY, BYBIT_LIMIT);
-
-                    const minRequiredData = Math.max(SMA_LONG_PERIOD, BB_PERIOD, RSI_PERIOD);
-                    if (!prices || prices.length < minRequiredData) {
-                        console.warn(`[Todas las Cryptos] Datos insuficientes para ${symbol}.`);
-                        tempRecommendations.hold.push(`${symbol} (Datos Insuficientes)`); 
-                    } else {
-                        const closingPrices = prices.map(p => p.y);
-                        const smaShort = calculateSMA(closingPrices, SMA_SHORT_PERIOD);
-                        const smaLong = calculateSMA(closingPrices, SMA_LONG_PERIOD);
-                        const bollingerBands = calculateBollingerBands(closingPrices, BB_PERIOD, BB_STD_DEV);
-                        const rsi = calculateRSI(closingPrices, RSI_PERIOD);
-
-                        const signals = getCombinedSignals(smaShort, smaLong, rsi, bollingerBands, closingPrices);
-                        
-                        if (signals.overall === 'buy') {
-                            tempRecommendations.buy.push(symbol);
-                        } else if (signals.overall === 'sell') {
-                            tempRecommendations.sell.push(symbol);
-                        } else {
-                            tempRecommendations.hold.push(symbol);
-                        }
-                    }
-
-                } catch (error) {
-                    console.error(`[Todas las Cryptos] Error al procesar ${symbol}:`, error);
-                    tempRecommendations.hold.push(`${symbol} (Error)`); 
-                }
-
-                renderOpportunityColumns(tempRecommendations);
-
-                if (i < allCryptos.length - 1) {
-                    await new Promise(resolve => setTimeout(resolve, ALL_CRYPTOS_API_DELAY));
-                }
-            }
-            isProcessingAllCryptos = false;
-            console.log("Análisis de TODAS las criptomonedas completado.");
-        }
-
-        // Función auxiliar para obtener la recomendación combinada
-        // MEJORA: Lógica de confluencia más estricta
-        function getCombinedSignals(smaShort, smaLong, rsi, bollingerBands, closingPrices) {
-            let smaRec = 'hold';
-            let rsiRec = 'hold';
-            let bbRec = 'hold';
-
-            const validSmaShort = smaShort ? smaShort.filter(v => v !== null) : [];
-            const validSmaLong = smaLong ? smaLong.filter(v => v !== null) : [];
-            if (validSmaShort.length >= 2 && validSmaLong.length >= 2) {
-                const lastSmaShort = validSmaShort[validSmaShort.length - 1].y;
-                const prevSmaShort = validSmaShort[validSmaShort.length - 2].y;
-                const lastSmaLong = validSmaLong[validSmaLong.length - 1].y;
-                const prevSmaLong = validSmaLong[validSmaLong.length - 2].y;
-                if (prevSmaShort <= prevSmaLong && lastSmaShort > lastSmaLong) smaRec = 'buy';
-                else if (prevSmaShort >= prevSmaLong && lastSmaLong < lastSmaLong) smaRec = 'sell';
-            } else {
-                // Si no hay suficientes datos válidos para SMA, la señal SMA es "N/A"
-                smaRec = 'N/A';
-            }
-
-
-            const validRsi = rsi ? rsi.filter(v => v !== null) : [];
-            if (validRsi.length > 0) { // Necesita al menos un punto válido
-                const lastRsi = validRsi[validRsi.length - 1].y;
-                if (lastRsi > RSI_OVERBOUGHT) rsiRec = 'sell';
-                else if (lastRsi < RSI_OVERSOLD) rsiRec = 'buy';
-            } else {
-                rsiRec = 'N/A';
-            }
-
-            const validBbUpper = (bollingerBands && bollingerBands.upper) ? bollingerBands.upper.filter(v => v !== null) : [];
-            const validBbLower = (bollingerBands && bollingerBands.lower) ? bollingerBands.lower.filter(v => v !== null) : [];
-            const lastPrice = closingPrices ? closingPrices[closingPrices.length - 1] : undefined; 
-
-            if (validBbUpper.length > 0 && validBbLower.length > 0 && lastPrice !== undefined) {
-                const lastBbUpper = validBbUpper[validBbUpper.length - 1].y;
-                const lastBbLower = validBbLower[validBbLower.length - 1].y;
-                if (lastPrice > lastBbUpper) bbRec = 'sell';
-                else if (lastPrice < lastBbLower) bbRec = 'buy';
-            } else {
-                bbRec = 'N/A';
-            }
-
-            let buyCount = 0;
-            let sellCount = 0;
-            let naCount = 0; // Contar indicadores no disponibles
-
-            if (smaRec === 'buy') buyCount++;
-            else if (smaRec === 'sell') sellCount++;
-            else naCount++; // Si es 'hold' o 'N/A'
-
-            if (rsiRec === 'buy') buyCount++;
-            else if (rsiRec === 'sell') sellCount++;
-            else naCount++;
-
-            if (bbRec === 'buy') buyCount++;
-            else if (bbRec === 'sell') sellCount++;
-            else naCount++;
-
-            let overallRecommendation = 'hold';
-
-            // Lógica de Confluencia MEJORADA y más estricta
-            // Solo si hay al menos 2 indicadores disponibles para decidir
-            if ((buyCount + sellCount) >= 2) { 
-                if (buyCount >= 2 && sellCount === 0) { // Al menos 2 compras y ninguna venta
-                    overallRecommendation = 'buy';
-                } else if (sellCount >= 2 && buyCount === 0) { // Al menos 2 ventas y ninguna compra
-                    overallRecommendation = 'sell';
-                } else { // Cualquier otro caso (empate, contradicción, o solo 1 señal fuerte)
-                    overallRecommendation = 'hold';
-                }
-            } else { // Si no hay suficientes indicadores disponibles (por ejemplo, todos son N/A o solo 1 es válido)
-                overallRecommendation = 'hold';
-                console.log(`getCombinedSignals: Recomendación forzada a HOLD por datos insuficientes de indicadores individuales.`); // Depuración
-            }
+            // Actualizar señales individuales con los datos recibidos del backend
+            const closingPrices = analysisData.klines.map(p => p.y); // Necesario para updateSignals
+            updateSignals(analysisData, closingPrices); // Pasar el objeto analysisData y closingPrices
             
-            console.log(`getCombinedSignals: Recs individuales: SMA=${smaRec}, RSI=${rsiRec}, BB=${bbRec}. Combinada: ${overallRecommendation}`); 
-            return { sma: smaRec, rsi: rsiRec, bb: bbRec, overall: overallRecommendation };
+            startUpdateTimer(UPDATE_INTERVAL_SELECTED_CRYPTO / 1000);
+            console.log("Análisis de criptomoneda seleccionada completado (datos de backend).");
         }
+
+        // updateAllCryptosOpportunities ahora también obtendrá datos del backend
+        async function updateAllCryptosOpportunities() {
+            console.log("Inicio de updateAllCryptosOpportunities (obteniendo de backend).");
+            // Esta función podría ser modificada para llamar a un endpoint del backend que devuelva
+            // las últimas recomendaciones para todas las cryptos en un solo request,
+            // pero por ahora, mantendremos la carga progresiva leyendo del historial.
+            // Para mostrar las últimas oportunidades, el backend debe calcularlas y guardarlas.
+            
+            // Para esta versión, como el backend ya está guardando, simplemente recargamos el historial
+            // que es donde están las últimas oportunidades.
+            loadHistoricalRecommendationsFromBackend();
+            
+            // No necesitamos la lógica compleja de looping y delays aquí,
+            // ya que el backend es quien genera las oportunidades en segundo plano.
+            // La "carga progresiva" la veremos en el historial mismo cuando se actualice.
+            
+            console.log("updateAllCryptosOpportunities: Recargando el historial para mostrar las últimas oportunidades.");
+        }
+
 
         // ===================================================================================
         // --- CÓDIGO DE INICIO Y EVENT LISTENERS ---
@@ -1504,13 +989,12 @@
             initStaticCryptoList(); 
 
             if (allCryptos.length > 0) {
-                // Ejecución inicial y configuración de intervalos
                 runSelectedCryptoAnalysis(); 
-                updateAllCryptosOpportunities();
+                updateAllCryptosOpportunities(); // Esta función ahora solo recarga el historial
                 loadHistoricalRecommendationsFromBackend(); 
 
                 setInterval(runSelectedCryptoAnalysis, UPDATE_INTERVAL_SELECTED_CRYPTO);
-                setInterval(updateAllCryptosOpportunities, UPDATE_INTERVAL_ALL_CRYPTOS); 
+                setInterval(updateAllCryptosOpportunities, UPDATE_INTERVAL_ALL_CRYPTOS); // Podría ser innecesario si la de historia ya hace lo suficiente
                 setInterval(loadHistoricalRecommendationsFromBackend, HISTORY_UPDATE_INTERVAL); 
             } else {
                 console.error("No se encontraron criptomonedas en la lista estática. La aplicación no puede iniciar correctamente.");
