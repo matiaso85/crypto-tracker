@@ -2,25 +2,49 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import csv
 import os
-from datetime import datetime, timedelta, timezone 
+from datetime import datetime, timedelta, timezone
+from apscheduler.schedulers.background import BackgroundScheduler # Para programar tareas
+import asyncio # Necesario para ejecutar funciones asíncronas con APScheduler
 
 app = Flask(__name__)
-CORS(app)
+CORS(app) # Habilitar CORS para permitir solicitudes desde el frontend
 
-CSV_FILE = 'data.csv' 
-HISTORY_DURATION_HOURS = 24 
+# --- CONFIGURACIÓN BACKEND ---
+BYBIT_INTERVAL = "60" 
+BYBIT_CATEGORY = "spot"
+BYBIT_LIMIT = 200 # Máximo de klines a obtener de Bybit por petición
 
-# Archivo adicional para guardar la ÚLTIMA recomendación por símbolo
-# AÑADIDO 'last_price' para el seguimiento del porcentaje de cambio.
-LAST_REC_FILE = 'last_recommendations.csv'
+SAVE_REC_TO_BACKEND_INTERVAL = timedelta(hours=1) # Guardar recomendación si pasó 1 hora
+PRICE_CHANGE_THRESHOLD = 0.03 # 3% de cambio de precio para guardar
 
+CSV_FILE = 'data.csv' # Archivo para el historial de recomendaciones
+LAST_REC_FILE = 'last_recommendations.csv' # Archivo para la última recomendación conocida por símbolo
+
+# Cache en memoria para las últimas señales calculadas para cada símbolo.
+# El frontend consultará esta cache.
+# Formato: {symbol: {overall: 'buy', sma: 'buy', rsi: 'hold', bb: 'N/A', timestamp: 'ISOSTRING', price: 123.45, klines: [...]}}
+current_analysis_cache = {} # Almacena resultados completos por símbolo
+
+# --- Lista de Símbolos a Monitorear (Debe coincidir con tu frontend) ---
+# En una aplicación más avanzada, esto se cargaría de una base de datos.
+SYMBOLS_TO_MONITOR = [
+    "BTCUSDT", "ETHUSDT", "BNBUSDT", "XRPUSDT", "SOLUSDT", "ADAUSDT", 
+    "DOGEUSDT", "SHIBUSDT", "DOTUSDT", "LTCUSDT", "LINKUSDT", "MATICUSDT",
+    "TRXUSDT", "AVAXUSDT", "UNIUSDT", "FILUSDT", "ICPUSDT", "APTUSDT", 
+    "SUIUSDT", "NEARUSDT", "ATOMUSDT", "ARBUSD", "OPUSDT", "IMXUSDT",
+    "AAVEUSDT", "ALGOUSDT", "FTMUSDT", "VETUSDT", "CHZUSDT", "GRTUSDT",
+    "AXSUSDT", "EOSUSDT", "KLAYUSDT", "SANDUSDT", "MANAUSDT",
+    # Stablecoins (si están en tu frontend)
+    # "USDTUSDC", "USDCUSDT", "BUSDUSDT", "DAIUSDT"
+]
+
+# --- FUNCIONES DE UTILIDAD CSV ---
 def ensure_csv_exists():
     if not os.path.exists(CSV_FILE):
         with open(CSV_FILE, mode='w', newline='', encoding='utf-8') as file:
             writer = csv.writer(file)
             writer.writerow(['timestamp', 'symbol', 'recommendation', 'prev_recommendation', 'metric_type', 'metric_value', 'details'])
     
-    # AÑADIDO 'last_price' al encabezado de last_recommendations.csv
     if not os.path.exists(LAST_REC_FILE):
         with open(LAST_REC_FILE, mode='w', newline='', encoding='utf-8') as file:
             writer = csv.writer(file)
@@ -28,105 +52,29 @@ def ensure_csv_exists():
 
 ensure_csv_exists()
 
-@app.route('/save_recommendation', methods=['POST'])
-def save_recommendation():
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({'message': 'No data provided'}), 400
+# Función para obtener la última recomendación guardada de last_recommendations.csv
+def get_last_recommendation_from_file(symbol):
+    if not os.path.exists(LAST_REC_FILE):
+        return None
+    with open(LAST_REC_FILE, mode='r', newline='', encoding='utf-8') as file:
+        reader = csv.DictReader(file)
+        for row in reader:
+            if row['symbol'] == symbol:
+                return row
+    return None
 
-        symbol = data.get('symbol')
-        recommendation = data.get('recommendation')
-        timestamp_iso = data.get('timestamp')
-        
-        sma_rec = data.get('sma_rec', 'N/A') 
-        rsi_rec = data.get('rsi_rec', 'N/A')
-        bb_rec = data.get('bb_rec', 'N/A')
-        current_price = data.get('current_price') # NUEVO: Recibe el precio actual del frontend
-
-        current_dt = datetime.fromisoformat(timestamp_iso.replace('Z', '+00:00')).replace(tzinfo=timezone.utc)
-
-        # 1. Obtener la última recomendación guardada para este símbolo
-        last_rec_data = None
-        current_rows_last_rec = []
-        if os.path.exists(LAST_REC_FILE):
-            with open(LAST_REC_FILE, mode='r', newline='', encoding='utf-8') as file:
-                reader = csv.DictReader(file)
-                current_rows_last_rec = list(reader)
-
-            for row in current_rows_last_rec:
-                if row['symbol'] == symbol:
-                    last_rec_data = row
-                    break
-        
-        prev_recommendation = last_rec_data.get('recommendation', 'N/A') if last_rec_data else 'N/A'
-        prev_sma_rec = last_rec_data.get('sma_rec', 'N/A') if last_rec_data else 'N/A'
-        prev_rsi_rec = last_rec_data.get('rsi_rec', 'N/A') if last_rec_data else 'N/A'
-        prev_bb_rec = last_rec_data.get('bb_rec', 'N/A') if last_rec_data else 'N/A'
-        # prev_price = float(last_rec_data.get('last_price', 0.0)) if last_rec_data and last_rec_data.get('last_price') else 0.0 # Aunque no lo usemos aquí, el frontend lo necesitará
-
-
-        metric_type = 'N/A'
-        metric_value = 0.0
-        details = ""
-
-        # Lógica de cálculo de acierto/riesgo (no cambia la lógica, solo el punto de decisión del guardado)
-        if prev_recommendation != 'N/A' and recommendation != 'N/A':
-            if recommendation == prev_recommendation:
-                metric_type = 'Acierto'
-                match_count = 0
-                if sma_rec == prev_sma_rec and sma_rec != 'N/A': match_count += 1
-                if rsi_rec == prev_rsi_rec and rsi_rec != 'N/A': match_count += 1
-                if bb_rec == prev_bb_rec and bb_rec != 'N/A': match_count += 1
-                
-                metric_value = (match_count / 3) * 100 if match_count > 0 else 0
-                details = f"Rec. mantenida. Indicadores coincidentes: {match_count}/3."
-            else:
-                metric_type = 'Riesgo'
-                change_count = 0
-                if sma_rec != prev_sma_rec and sma_rec != 'N/A': change_count += 1
-                if rsi_rec != prev_rsi_rec and rsi_rec != 'N/A': change_count += 1
-                if bb_rec != prev_bb_rec and bb_rec != 'N/A': change_count += 1
-                
-                metric_value = (change_count / 3) * 100 if change_count > 0 else 0
-                details = f"Rec. cambió de '{prev_recommendation}' a '{recommendation}'. Indicadores cambiantes: {change_count}/3."
-        else:
-            details = "Primera recomendación para el símbolo o datos insuficientes para comparar."
-
-        # 2. Guardar la entrada en el historial general (data.csv)
-        with open(CSV_FILE, mode='a', newline='', encoding='utf-8') as file:
-            writer = csv.writer(file)
-            writer.writerow([
-                timestamp_iso,
-                symbol,
-                recommendation,
-                prev_recommendation, 
-                metric_type,
-                round(metric_value, 2), # Redondea el porcentaje
-                details
-            ])
-        
-        # 3. Actualizar la última recomendación conocida para este símbolo (last_recommendations.csv)
-        found = False
-        updated_rows = []
-        
-        if current_rows_last_rec:
-            for row in current_rows_last_rec:
-                if row['symbol'] == symbol:
-                    updated_rows.append({
-                        'symbol': symbol,
-                        'timestamp': timestamp_iso,
-                        'recommendation': recommendation,
-                        'sma_rec': sma_rec,
-                        'rsi_rec': rsi_rec,
-                        'bb_rec': bb_rec,
-                        'last_price': current_price # NUEVO: Guardar el precio actual
-                    })
-                    found = True
-                else:
-                    updated_rows.append(row)
-        
-        if not found:
+# Función para actualizar la última recomendación en last_recommendations.csv
+def update_last_recommendation_file(symbol, timestamp_iso, recommendation, sma_rec, rsi_rec, bb_rec, current_price):
+    rows = []
+    found = False
+    if os.path.exists(LAST_REC_FILE):
+        with open(LAST_REC_FILE, mode='r', newline='', encoding='utf-8') as file:
+            reader = csv.DictReader(file)
+            rows = list(reader)
+    
+    updated_rows = []
+    for row in rows:
+        if row['symbol'] == symbol:
             updated_rows.append({
                 'symbol': symbol,
                 'timestamp': timestamp_iso,
@@ -134,21 +82,324 @@ def save_recommendation():
                 'sma_rec': sma_rec,
                 'rsi_rec': rsi_rec,
                 'bb_rec': bb_rec,
-                'last_price': current_price # NUEVO: Guardar el precio actual
+                'last_price': current_price
             })
-        
-        with open(LAST_REC_FILE, mode='w', newline='', encoding='utf-8') as file:
-            # Asegúrate de que fieldnames incluya 'last_price'
-            writer = csv.DictWriter(file, fieldnames=['symbol', 'timestamp', 'recommendation', 'sma_rec', 'rsi_rec', 'bb_rec', 'last_price'])
-            writer.writeheader() 
-            writer.writerows(updated_rows) 
+            found = True
+        else:
+            updated_rows.append(row)
+    
+    if not found:
+        updated_rows.append({
+            'symbol': symbol,
+            'timestamp': timestamp_iso,
+            'recommendation': recommendation,
+            'sma_rec': sma_rec,
+            'rsi_rec': rsi_rec,
+            'bb_rec': bb_rec,
+            'last_price': current_price
+        })
+    
+    with open(LAST_REC_FILE, mode='w', newline='', encoding='utf-8') as file:
+        writer = csv.DictWriter(file, fieldnames=['symbol', 'timestamp', 'recommendation', 'sma_rec', 'rsi_rec', 'bb_rec', 'last_price'])
+        writer.writeheader()
+        writer.writerows(updated_rows)
 
-        print(f"[{datetime.now().isoformat()}] Saved and updated last rec for {symbol}: {recommendation}, Price: {current_price}")
-        return jsonify({'message': 'Recommendation saved and updated successfully'}), 200
+# --- FUNCIONES DE OBTENCIÓN DE DATOS (Bybit API - Portadas de JS a Python) ---
+async def get_bybit_klines(symbol, interval=BYBIT_INTERVAL, category=BYBIT_CATEGORY, limit=BYBIT_LIMIT):
+    import httpx # Se necesita para peticiones HTTP asíncronas
+    url = f"https://api.bybit.com/v5/market/kline?category={category}&symbol={symbol}&interval={interval}&limit={limit}"
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, timeout=10.0) # Añadir timeout
+            response.raise_for_status() # Lanza excepción para códigos de error HTTP
+            
+            data = response.json()
+            
+            if not data or not data.get('result') or not data['result'].get('list'):
+                raise ValueError(f"API de Bybit para {symbol} devolvió respuesta válida pero sin datos de klines.")
+            
+            formatted_prices = []
+            for kline in data['result']['list']:
+                # kline: [timestamp, open, high, low, close, volume, turnOver]
+                formatted_prices.append({
+                    'x': int(kline[0]),
+                    'y': float(kline[4]) # Precio de cierre
+                })
+            
+            return formatted_prices[::-1] # Revertir para que sea del más antiguo al más nuevo
 
+    except httpx.HTTPStatusError as e:
+        print(f"Error HTTP de Bybit para {symbol}: {e.response.status_code} - {e.response.text}")
+        return None
+    except httpx.RequestError as e:
+        print(f"Error de red al conectar con Bybit para {symbol}: {e}")
+        return None
+    except ValueError as e:
+        print(f"Error de datos de Bybit para {symbol}: {e}")
+        return None
     except Exception as e:
-        print(f"Error saving recommendation: {e}")
-        return jsonify({'message': f'Internal server error: {str(e)}'}), 500
+        print(f"Error inesperado al obtener datos de Bybit para {symbol}: {e}")
+        return None
+
+# --- FUNCIONES DE CÁLCULO DE INDICADORES (Portadas de JS a Python) ---
+def calculate_sma(data, period):
+    sma = []
+    if not data or len(data) < period:
+        return [None] * len(data) if data else [] # Asegura longitud si data existe
+
+    for i in range(len(data)):
+        if i < period - 1:
+            sma.append(None)
+        else:
+            slic = data[i - period + 1 : i + 1]
+            sum_val = sum(slic)
+            sma.append({'y': sum_val / period})
+    return sma
+
+def calculate_bollinger_bands(data, period, std_dev_multiplier):
+    middle = []
+    upper = []
+    lower = []
+    if not data or len(data) < period:
+        nulls = [None] * len(data) if data else []
+        return {'middle': nulls, 'upper': nulls, 'lower': nulls}
+
+    for i in range(len(data)):
+        if i < period - 1:
+            middle.append(None)
+            upper.append(None)
+            lower.append(None)
+        else:
+            slic = data[i - period + 1 : i + 1]
+            mean = sum(slic) / period
+            std_dev = (sum((x - mean) ** 2 for x in slic) / period) ** 0.5
+            
+            middle.append({'y': mean})
+            upper.append({'y': mean + (std_dev * std_dev_multiplier)})
+            lower.append({'y': mean - (std_dev * std_dev_multiplier)})
+    return {'middle': middle, 'upper': upper, 'lower': lower}
+
+def calculate_rsi(data, period):
+    rsi_values = []
+    
+    if not data or len(data) < period + 1:
+        return [None] * len(data) if data else []
+
+    for _ in range(period):
+        rsi_values.append(None)
+
+    gains = []
+    losses = []
+    for i in range(1, len(data)):
+        diff = data[i] - data[i - 1]
+        gains.append(diff if diff > 0 else 0)
+        losses.append(abs(diff) if diff < 0 else 0)
+
+    avg_gain = sum(gains[0:period]) / period
+    avg_loss = sum(losses[0:period]) / period
+
+    if avg_loss == 0:
+        rsi_values.append({'y': 100.0})
+    else:
+        rs = avg_gain / avg_loss
+        rsi_values.append({'y': 100 - (100 / (1 + rs))})
+
+    for i in range(period, len(gains)):
+        current_gain = gains[i]
+        current_loss = losses[i]
+
+        avg_gain = ((avg_gain * (period - 1)) + current_gain) / period
+        avg_loss = ((avg_loss * (period - 1)) + current_loss) / period
+
+        if avg_loss == 0:
+            rsi_values.append({'y': 100.0})
+        else:
+            rs = avg_gain / avg_loss
+            rsi_values.append({'y': 100 - (100 / (1 + rs))})
+    return rsi_values
+
+# --- Lógica de Señales Combinadas (Portado de JS a Python) ---
+def get_combined_signals(sma_short, sma_long, rsi, bollinger_bands, closing_prices):
+    sma_rec = 'hold'
+    rsi_rec = 'hold'
+    bb_rec = 'hold'
+
+    valid_sma_short = [v['y'] for v in sma_short if v is not None]
+    valid_sma_long = [v['y'] for v in sma_long if v is not None]
+    if len(valid_sma_short) >= 2 and len(valid_sma_long) >= 2:
+        last_sma_short = valid_sma_short[-1]
+        prev_sma_short = valid_sma_short[-2]
+        last_sma_long = valid_sma_long[-1]
+        prev_sma_long = valid_sma_long[-2]
+        if prev_sma_short <= prev_sma_long and last_sma_short > last_sma_long:
+            sma_rec = 'buy'
+        elif prev_sma_short >= prev_sma_long and last_sma_short < last_sma_long:
+            sma_rec = 'sell'
+    else:
+        sma_rec = 'N/A'
+
+    valid_rsi = [v['y'] for v in rsi if v is not None]
+    if len(valid_rsi) > 0:
+        last_rsi = valid_rsi[-1]
+        if last_rsi > 70:
+            rsi_rec = 'sell'
+        elif last_rsi < 30:
+            rsi_rec = 'buy'
+    else:
+        rsi_rec = 'N/A'
+
+    valid_bb_upper = [v['y'] for v in bollinger_bands['upper'] if v is not None]
+    valid_bb_lower = [v['y'] for v in bollinger_bands['lower'] if v is not None]
+    last_price_val = closing_prices[-1] if closing_prices else None # Renombrado para evitar conflicto con last_price en archivo
+
+    if len(valid_bb_upper) > 0 and len(valid_bb_lower) > 0 and last_price_val is not None:
+        last_bb_upper = valid_bb_upper[-1]
+        last_bb_lower = valid_bb_lower[-1]
+        if last_price_val > last_bb_upper:
+            bb_rec = 'sell'
+        elif last_price_val < last_bb_lower:
+            bb_rec = 'buy'
+    else:
+        bb_rec = 'N/A'
+
+    buy_count = 0
+    sell_count = 0
+    na_count = 0
+
+    if sma_rec == 'buy': buy_count += 1
+    elif sma_rec == 'sell': sell_count += 1
+    else: na_count += 1
+
+    if rsi_rec == 'buy': buy_count += 1
+    elif rsi_rec == 'sell': sell_count += 1
+    else: na_count += 1
+
+    if bb_rec == 'buy': buy_count += 1
+    elif bb_rec == 'sell': sell_count += 1
+    else: na_count += 1
+
+    overall_recommendation = 'hold'
+
+    if (buy_count + sell_count) >= 2: 
+        if buy_count >= 2 and sell_count == 0:
+            overall_recommendation = 'buy'
+        elif sell_count >= 2 and buy_count == 0:
+            overall_recommendation = 'sell'
+        else:
+            overall_recommendation = 'hold'
+    else:
+        overall_recommendation = 'hold' # Forzar a HOLD si no hay suficientes indicadores válidos
+    
+    return {'sma': sma_rec, 'rsi': rsi_rec, 'bb': bb_rec, 'overall': overall_recommendation}
+
+
+# --- TAREA PROGRAMADA PARA OBTENER Y ANALIZAR DATOS ---
+async def scheduled_analysis_job(symbols):
+    print(f"[{datetime.now().isoformat()}] Scheduled job started for {len(symbols)} symbols.")
+    for symbol in symbols:
+        try:
+            print(f"[{datetime.now().isoformat()}] Analyzing {symbol}...")
+            klines_data = await get_bybit_klines(symbol)
+            
+            # --- VALIDACIÓN DE DATOS PARA CÁLCULO ---
+            min_required_klines = max(20, 50, 14) + 1 # El +1 es porque RSI necesita diff entre 2 puntos
+            if not klines_data or len(klines_data) < min_required_klines:
+                print(f"[{datetime.now().isoformat()}] Insufficient data for {symbol}. Needed {min_required_klines}, got {len(klines_data) if klines_data else 0}. Skipping analysis.")
+                # Si no hay suficientes datos para calcular, asigna HOLD y N/A
+                current_overall_rec = 'hold'
+                individual_recs = {'sma': 'N/A', 'rsi': 'N/A', 'bb': 'N/A'}
+                current_price = klines_data[-1]['y'] if klines_data and len(klines_data) > 0 else 0.0 # Intentar obtener el último precio si hay datos
+            else:
+                closing_prices = [p['y'] for p in klines_data]
+                current_price = closing_prices[-1]
+
+                sma_short = calculate_sma(closing_prices, 20)
+                sma_long = calculate_sma(closing_prices, 50)
+                bollinger_bands = calculate_bollinger_bands(closing_prices, 20, 2)
+                rsi = calculate_rsi(closing_prices, 14)
+
+                combined_signals = get_combined_signals(sma_short, sma_long, rsi, bollinger_bands, closing_prices)
+                current_overall_rec = combined_signals['overall']
+                individual_recs = {'sma': combined_signals['sma'], 'rsi': combined_signals['rsi'], 'bb': combined_signals['bb']}
+            
+            # Decidir si guardar la recomendación (lógica de 1 hora / 3% de cambio)
+            last_rec_info = get_last_recommendation_from_file(symbol)
+            
+            should_save = False
+            now_dt = datetime.now(timezone.utc)
+            
+            if last_rec_info:
+                last_saved_timestamp = datetime.fromisoformat(last_rec_info['timestamp'].replace('Z', '+00:00')).replace(tzinfo=timezone.utc)
+                last_saved_price = float(last_rec_info.get('last_price', 0.0))
+                
+                has_time_passed = (now_dt - last_saved_timestamp) >= SAVE_REC_TO_BACKEND_INTERVAL
+                
+                has_significant_price_change = False
+                if last_saved_price != 0.0 and current_price is not None and current_price != 0:
+                    percentage_change = abs(current_price - last_saved_price) / last_saved_price
+                    has_significant_price_change = percentage_change >= PRICE_CHANGE_THRESHOLD
+                    print(f"  {symbol}: % cambio precio: {(percentage_change*100):.2f}% (Umbral: {PRICE_CHANGE_THRESHOLD*100:.0f}%), Tiempo pasado: {has_time_passed}")
+                else: 
+                     has_significant_price_change = True # Si no hay precio guardado o es 0, siempre guardar si es la primera vez.
+
+                if has_time_passed or has_significant_price_change:
+                    should_save = True
+            else: # Primera recomendación para este símbolo
+                should_save = True
+                print(f"  {symbol}: Primera recomendación, guardando.")
+
+            if should_save:
+                last_prev_rec = last_rec_info.get('recommendation', 'N/A') if last_rec_info else 'N/A'
+                last_prev_sma_rec = last_rec_info.get('sma_rec', 'N/A') if last_rec_info else 'N/A'
+                last_prev_rsi_rec = last_rec_info.get('rsi_rec', 'N/A') if last_rec_info else 'N/A'
+                last_prev_bb_rec = last_rec_info.get('bb_rec', 'N/A') if last_rec_info else 'N/A'
+                
+                metric_type = 'N/A'
+                metric_value = 0.0
+                details = ""
+
+                if last_prev_rec != 'N/A' and current_overall_rec != 'N/A':
+                    if current_overall_rec == last_prev_rec:
+                        metric_type = 'Acierto'
+                        match_count = 0
+                        if individual_recs['sma'] == last_prev_sma_rec and individual_recs['sma'] != 'N/A': match_count += 1
+                        if individual_recs['rsi'] == last_prev_rsi_rec and individual_recs['rsi'] != 'N/A': match_count += 1
+                        if individual_recs['bb'] == last_prev_bb_rec and individual_recs['bb'] != 'N/A': match_count += 1
+                        metric_value = (match_count / 3) * 100 if match_count > 0 else 0
+                        details = f"Rec. mantenida. Indicadores coincidentes: {match_count}/3."
+                    else:
+                        metric_type = 'Riesgo'
+                        change_count = 0
+                        if individual_recs['sma'] != last_prev_sma_rec and individual_recs['sma'] != 'N/A': change_count += 1
+                        if individual_recs['rsi'] != last_prev_rsi_rec and individual_recs['rsi'] != 'N/A': change_count += 1
+                        if individual_recs['bb'] != last_prev_bb_rec and individual_recs['bb'] != 'N/A': change_count += 1
+                        metric_value = (change_count / 3) * 100 if change_count > 0 else 0
+                        details = f"Rec. cambió de '{last_prev_rec}' a '{current_overall_rec}'. Indicadores cambiantes: {change_count}/3."
+                else:
+                    details = "Primera recomendación para el símbolo o datos insuficientes para comparar."
+
+                with open(CSV_FILE, mode='a', newline='', encoding='utf-8') as file:
+                    writer = csv.writer(file)
+                    writer.writerow([
+                        now_dt.isoformat().replace('+00:00', 'Z'), # Formato ISO para JS
+                        symbol,
+                        current_overall_rec,
+                        last_prev_rec,
+                        metric_type,
+                        round(metric_value, 2),
+                        details
+                    ])
+                
+                update_last_recommendation_file(symbol, now_dt.isoformat().replace('+00:00', 'Z'), current_overall_rec, individual_recs['sma'], individual_recs['rsi'], individual_recs['bb'], current_price)
+                print(f"[{datetime.now().isoformat()}] Saved new entry for {symbol}: {current_overall_rec}, Price: {current_price}")
+            else:
+                print(f"[{datetime.now().isoformat()}] Skipping save for {symbol}: No significant change or time not passed.")
+
+        except Exception as e:
+            print(f"[{datetime.now().isoformat()}] Error in scheduled analysis for {symbol}: {e}")
+
+# --- RUTAS DE LA API ---
 
 # Endpoint para obtener las recomendaciones (sin cambios en la lógica de obtención)
 @app.route('/get_recommendations', methods=['GET'])
@@ -156,7 +407,7 @@ def get_recommendations():
     recommendations = []
     
     current_time_utc = datetime.now(timezone.utc) 
-    threshold_time_utc = current_time_utc - timedelta(hours=HISTORY_DURATION_HOURS)
+    threshold_time_utc = current_time_utc - timedelta(hours=24) # Usamos 24 horas para el historial que se muestra
 
     try:
         with open(CSV_FILE, mode='r', encoding='utf-8') as file:
@@ -196,5 +447,107 @@ def get_recommendations():
         print(f"Error getting recommendations: {e}")
         return jsonify({'message': f'Internal server error: {str(e)}'}), 500
 
+# NUEVO ENDPOINT: Para que el frontend obtenga las señales actuales y datos de Klines para el gráfico
+@app.route('/get_latest_analysis/<symbol>', methods=['GET'])
+async def get_latest_analysis(symbol):
+    print(f"[{datetime.now().isoformat()}] Frontend requested latest analysis for {symbol}")
+    
+    # Buscar en la cache si ya tenemos los datos recientes para este símbolo
+    if symbol in current_analysis_cache and current_analysis_cache[symbol].get('klines'):
+        print(f"[{datetime.now().isoformat()}] Serving from cache for {symbol}.")
+        return jsonify(current_analysis_cache[symbol]), 200
+    
+    # Si no está en cache o no hay klines, intentar obtenerlos (esto es síncrono para la ruta, lo ideal es que la cache ya esté llena por el scheduler)
+    print(f"[{datetime.now().isoformat()}] Cache miss for {symbol}, trying to fetch live.")
+    try:
+        klines_data = await get_bybit_klines(symbol)
+        
+        if not klines_data or len(klines_data) < max(20, 50, 14) + 1:
+            print(f"[{datetime.now().isoformat()}] Insufficient data for {symbol} on live fetch for frontend. Returning empty.")
+            return jsonify({
+                'overall_rec': 'hold', 'sma': 'N/A', 'rsi': 'N/A', 'bb': 'N/A',
+                'klines': [], 'sma_short': [], 'sma_long': [], 'bb_bands': {'middle':[],'upper':[],'lower':[]}, 'rsi_data': []
+            }), 200
+        
+        closing_prices = [p['y'] for p in klines_data]
+        sma_short = calculate_sma(closing_prices, 20)
+        sma_long = calculate_sma(closing_prices, 50)
+        bollinger_bands = calculate_bollinger_bands(closing_prices, 20, 2)
+        rsi = calculate_rsi(closing_prices, 14)
+        combined_signals = get_combined_signals(sma_short, sma_long, rsi, bollinger_bands, closing_prices)
+
+        response_data = {
+            'overall_rec': combined_signals['overall'],
+            'sma': combined_signals['sma'],
+            'rsi': combined_signals['rsi'],
+            'bb': combined_signals['bb'],
+            'klines': klines_data,
+            'sma_short': sma_short,
+            'sma_long': sma_long,
+            'bb_bands': bollinger_bands,
+            'rsi_data': rsi
+        }
+        # Actualizar la cache para futuras peticiones
+        current_analysis_cache[symbol] = response_data
+        
+        return jsonify(response_data), 200
+    except Exception as e:
+        print(f"[{datetime.now().isoformat()}] Error serving live analysis for {symbol}: {e}")
+        return jsonify({'message': f'Error fetching live data: {str(e)}'}), 500
+
+
+# --- Lógica de Programación de Tareas ---
+scheduler = BackgroundScheduler()
+
+# LISTA DE SÍMBOLOS A MONITOREAR (¡Necesitas que esta lista coincida con tu frontend o se cargue de alguna manera!)
+# Para simplificar, usamos una sub-selección de las criptos del frontend.
+SYMBOLS_TO_MONITOR = [
+    "BTCUSDT", "ETHUSDT", "BNBUSDT", "XRPUSDT", "SOLUSDT", "ADAUSDT", 
+    "DOGEUSDT", "SHIBUSDT", "DOTUSDT", "LTCUSDT", "LINKUSDT", "MATICUSDT",
+    "TRXUSDT", "AVAXUSDT", "UNIUSDT", "FILUSDT", "ICPUSDT", "APTUSDT", 
+    "SUIUSDT", "NEARUSDT", "ATOMUSDT", "ARBUSD", "OPUSDT", "IMXUSDT",
+    "AAVEUSDT", "ALGOUSDT", "FTMUSDT", "VETUSDT", "CHZUSDT", "GRTUSDT",
+    "AXSUSDT", "EOSUSDT", "KLAYUSDT", "SANDUSDT", "MANAUSDT",
+]
+
+# Añadir la tarea programada: Ejecuta 'scheduled_analysis_job' cada 2 minutos
+scheduler.add_job(
+    lambda: asyncio.run(scheduled_analysis_job(SYMBOLS_TO_MONITOR)), # Uso de asyncio.run
+    'interval',
+    minutes=2, # Ejecuta la tarea cada 2 minutos
+    id='full_crypto_analysis',
+    max_instances=1 # Asegura que solo una instancia de la tarea se ejecute a la vez
+)
+
+# Esto se ejecuta una vez cuando la aplicación Flask se inicia
+@app.before_first_request
+def initialize_app():
+    # Asegurarse de que el scheduler ya esté iniciado
+    if not scheduler.running:
+        scheduler.start()
+        print("Scheduler started from @app.before_first_request.")
+    # Ejecutar la tarea programada al inicio para poblar la cache lo antes posible
+    print("Running initial scheduled job to populate cache.")
+    asyncio.run(scheduled_analysis_job(SYMBOLS_TO_MONITOR))
+
+
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    # Para la ejecución local, necesitamos un loop de eventos de asyncio
+    # y ejecutar el scheduler explícitamente si no es por gunicorn
+    print("Running Flask app in __main__ block (for local development).")
+    
+    # Configurar el loop de eventos de asyncio para el contexto local
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
+    # Esto asegura que el scheduler inicie y se mantenga vivo localmente
+    if not scheduler.running:
+        scheduler.start()
+        print("Scheduler started locally.")
+        # Opcional: Ejecutar la tarea una vez al inicio local
+        # asyncio.run(scheduled_analysis_job(SYMBOLS_TO_MONITOR))
+
+    app.run(debug=True, host='0.0.0.0', port=5000, use_reloader=False) # use_reloader=False para no doble-iniciar scheduler
