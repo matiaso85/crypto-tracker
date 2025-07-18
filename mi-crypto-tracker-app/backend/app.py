@@ -11,9 +11,8 @@ app = Flask(__name__)
 CORS(app) 
 
 # --- CONFIGURACIÓN BACKEND ---
-# CAMBIADO: Usaremos parámetros de KuCoin API
-KUCOIN_INTERVAL = "1hour" # "1min", "3min", "5min", "15min", "30min", "1hour", "2hour", "4hour", "6hour", "8hour", "12hour", "1day", "1week"
-KUCOIN_LIMIT = 200 # Máximo de klines a obtener de KuCoin por petición (máx 1500, pero 200 es suficiente para nuestros cálculos)
+KUCOIN_INTERVAL = "1hour" 
+KUCOIN_LIMIT = 200 
 
 SAVE_REC_TO_BACKEND_INTERVAL = timedelta(hours=1) 
 PRICE_CHANGE_THRESHOLD = 0.03 
@@ -23,18 +22,16 @@ LAST_REC_FILE = 'last_recommendations.csv'
 
 current_analysis_cache = {} 
 
-# --- Lista de Símbolos a Monitorear (AJUSTADA PARA KUCOIN - PARES USDT) ---
-# KuCoin usa formato BASE-QUOTE (ej. BTC-USDT)
-# Verifica la disponibilidad de estos pares en KuCoin.
+# --- Lista de Símbolos a Monitorear (AHORA COINCIDE CON EL FRONTEND, EL BACKEND LOS CONVIERTE) ---
 SYMBOLS_TO_MONITOR = [
-    "BTC-USDT", "ETH-USDT", "BNB-USDT", "XRP-USDT", "SOL-USDT", "ADA-USDT", 
-    "DOGE-USDT", "SHIB-USDT", "DOT-USDT", "LTC-USDT", "LINK-USDT", "MATIC-USDT",
-    "TRX-USDT", "AVAX-USDT", "UNI-USDT", "FIL-USDT", "ICP-USDT", "APT-USDT", 
-    "NEAR-USDT", "ATOM-USDT", "ARB-USDT", "OP-USDT", "IMX-USDT", 
-    "AAVE-USDT", "ALGO-USDT", "FTM-USDT", "VET-USDT", "CHZ-USDT", 
-    "GRT-USDT", "EOS-USDT", "SAND-USDT", "MANA-USDT",
-    # Stablecoins (ej. USDC-USDT)
-    "USDC-USDT", 
+    "BTCUSDT", "ETHUSDT", "BNBUSDT", "XRPUSDT", "SOLUSDT", "ADAUSDT", 
+    "DOGEUSDT", "SHIBUSDT", "DOTUSDT", "LTCUSDT", "LINKUSDT", "MATICUSDT",
+    "TRXUSDT", "AVAXUSDT", "UNIUSDT", "FILUSDT", "ICPUSDT", "APTUSDT", 
+    "SUIUSDT", "NEARUSDT", "ATOMUSDT", "ARBUSD", "OPUSDT", "IMXUSDT", # Estos deberían ser ARB-USDT etc. en KuCoin, los mapearemos.
+    "AAVEUSDT", "ALGOUSDT", "FTMUSDT", "VETUSDT", "CHZUSDT", "GRTUSDT",
+    "AXSUSDT", "EOSUSDT", "SANDUSDT", "MANAUSDT",
+    "USDCUSDT", # KuCoin tiene USDC-USDT
+    # No todas las stablecoins listadas en el frontend pueden tener pares directos USDT en KuCoin, pero las comunes sí.
 ]
 
 
@@ -104,12 +101,19 @@ def update_last_recommendation_file(symbol, timestamp_iso, recommendation, sma_r
         writer.writeheader()
         writer.writerows(updated_rows)
 
-# --- FUNCIONES DE OBTENCIÓN DE DATOS (AHORA PARA KUCOIN) ---
+# --- FUNCIONES DE OBTENCIÓN DE DATOS (AHORA PARA KUCOIN CON CONVERSIÓN DE SÍMBOLO) ---
 async def get_kucoin_klines(symbol, interval=KUCOIN_INTERVAL, limit=KUCOIN_LIMIT):
-    # Endpoint de KuCoin para velas
-    # https://api.kucoin.com/api/v1/market/candles?symbol={symbol}&type={type}&limit={limit}
-    # type = "1min", "1hour", etc.
-    url = f"https://api.kucoin.com/api/v1/market/candles?symbol={symbol}&type={interval}&limit={limit}"
+    # NUEVO: Convertir el símbolo de 'BTCUSDT' a 'BTC-USDT' para la API de KuCoin
+    kucoin_symbol = symbol.replace('USDT', '-USDT').replace('USDC', '-USDC') # Ej. BTCUSDT -> BTC-USDT
+    if kucoin_symbol == 'ARBUSD': # Manejo específico para ARB (si en frontend es ARBUSD y KuCoin es ARB-USDT)
+        kucoin_symbol = 'ARB-USDT'
+    elif kucoin_symbol == 'OPUSDT':
+        kucoin_symbol = 'OP-USDT'
+    elif kucoin_symbol == 'IMXUSDT':
+        kucoin_symbol = 'IMX-USDT'
+    # Agrega más reglas si hay otros símbolos que no sigan el patrón simple BASE-QUOTE
+
+    url = f"https://api.kucoin.com/api/v1/market/candles?symbol={kucoin_symbol}&type={interval}&limit={limit}"
     
     try:
         async with httpx.AsyncClient() as client:
@@ -119,31 +123,29 @@ async def get_kucoin_klines(symbol, interval=KUCOIN_INTERVAL, limit=KUCOIN_LIMIT
             data = response.json()
             
             if not data or not data.get('data') or not isinstance(data['data'], list) or len(data['data']) == 0:
-                raise ValueError(f"API de KuCoin para {symbol} devolvió respuesta válida pero sin datos de velas.")
+                # Esto ahora podría significar que el símbolo mapeado tampoco existe o no tiene datos
+                raise ValueError(f"API de KuCoin para {kucoin_symbol} (original: {symbol}) devolvió respuesta válida pero sin datos de velas.")
             
             formatted_prices = []
-            # KuCoin devuelve: [timestamp, open, close, high, low, volume, amount]
-            # y el orden es del MÁS RECIENTE al MÁS ANTIGUO.
-            # Timestamp está en segundos.
             for kline in data['data']:
                 formatted_prices.append({
-                    'x': int(kline[0]) * 1000, # Timestamp de segundos a milisegundos para JS
-                    'y': float(kline[2])      # Precio de cierre (índice 2)
+                    'x': int(kline[0]) * 1000, 
+                    'y': float(kline[2])      
                 })
             
-            return formatted_prices[::-1] # Revertir para que sea del más antiguo al más nuevo
+            return formatted_prices[::-1] 
 
     except httpx.HTTPStatusError as e:
-        print(f"Error HTTP de KuCoin para {symbol}: {e.response.status_code} - {e.response.text}")
+        print(f"Error HTTP de KuCoin para {kucoin_symbol} (original: {symbol}): {e.response.status_code} - {e.response.text}")
         return None
     except httpx.RequestError as e:
-        print(f"Error de red al conectar con KuCoin para {symbol}: {e}")
+        print(f"Error de red al conectar con KuCoin para {kucoin_symbol} (original: {symbol}): {e}")
         return None
     except ValueError as e:
-        print(f"Error de datos de KuCoin para {symbol}: {e}")
+        print(f"Error de datos de KuCoin para {kucoin_symbol} (original: {symbol}): {e}")
         return None
     except Exception as e:
-        print(f"Error inesperado al obtener datos de KuCoin para {symbol}: {e}")
+        print(f"Error inesperado al obtener datos de KuCoin para {kucoin_symbol} (original: {symbol}): {e}")
         return None
 
 
@@ -513,10 +515,10 @@ SYMBOLS_TO_MONITOR = [
     "BTC-USDT", "ETH-USDT", "BNB-USDT", "XRP-USDT", "SOL-USDT", "ADA-USDT", 
     "DOGE-USDT", "SHIB-USDT", "DOT-USDT", "LTC-USDT", "LINK-USDT", "MATIC-USDT",
     "TRX-USDT", "AVAX-USDT", "UNI-USDT", "FIL-USDT", "ICP-USDT", "APT-USDT", 
-    "SUI-USDT", "NEAR-USDT", "ATOM-USDT", "ARB-USDT", "OP-USDT", "IMX-USDT", # KuCoin tiene estos con -USDT
-    "AAVE-USDT", "ALGO-USDT", "FTM-USDT", "VET-USDT", "CHZ-USDT", "GRT-USDT",
-    "AXS-USDT", "EOS-USDT", "SAND-USDT", "MANA-USDT",
-    "USDC-USDT", # Stablecoin común en KuCoin
+    "NEAR-USDT", "ATOM-USDT", "ARB-USDT", "OP-USDT", "IMX-USDT", 
+    "AAVE-USDT", "ALGO-USDT", "FTM-USDT", "VET-USDT", "CHZ-USDT", 
+    "GRT-USDT", "EOS-USDT", "SAND-USDT", "MANA-USDT",
+    "USDC-USDT", 
 ]
 
 # Añadir la tarea programada: Ejecuta 'scheduled_analysis_job' cada 2 minutos
