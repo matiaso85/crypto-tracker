@@ -11,9 +11,9 @@ app = Flask(__name__)
 CORS(app) 
 
 # --- CONFIGURACIÓN BACKEND ---
-# CAMBIADO: Usaremos parámetros de Coinbase Pro API
-COINBASE_PRO_INTERVAL = 3600 # 3600 segundos = 1 hora para Coinbase Pro
-COINBASE_PRO_LIMIT = 200 # Máximo de velas a obtener de Coinbase Pro por petición (máx 300)
+# CAMBIADO: Usaremos parámetros de KuCoin API
+KUCOIN_INTERVAL = "1hour" # "1min", "3min", "5min", "15min", "30min", "1hour", "2hour", "4hour", "6hour", "8hour", "12hour", "1day", "1week"
+KUCOIN_LIMIT = 200 # Máximo de klines a obtener de KuCoin por petición (máx 1500, pero 200 es suficiente para nuestros cálculos)
 
 SAVE_REC_TO_BACKEND_INTERVAL = timedelta(hours=1) 
 PRICE_CHANGE_THRESHOLD = 0.03 
@@ -23,18 +23,18 @@ LAST_REC_FILE = 'last_recommendations.csv'
 
 current_analysis_cache = {} 
 
-# --- Lista de Símbolos a Monitorear (AJUSTADA PARA COINBASE PRO - PARES USD) ---
-# Coinbase Pro usa formato BASE-QUOTE (ej. BTC-USD)
-# Verifica la disponibilidad de estos pares en Coinbase Pro.
+# --- Lista de Símbolos a Monitorear (AJUSTADA PARA KUCOIN - PARES USDT) ---
+# KuCoin usa formato BASE-QUOTE (ej. BTC-USDT)
+# Verifica la disponibilidad de estos pares en KuCoin.
 SYMBOLS_TO_MONITOR = [
-    "BTC-USD", "ETH-USD", "SOL-USD", "ADA-USD", "DOGE-USD", 
-    "XRP-USD", "LTC-USD", "LINK-USD", "MATIC-USD", "TRX-USD",
-    "AVAX-USD", "UNI-USD", "FIL-USD", "ICP-USD", "APT-USD", 
-    "NEAR-USD", "ATOM-USD", "AAVE-USD", "ALGO-USD", "FTM-USD", 
-    "VET-USD", "CHZ-USD", "GRT-USD", "EOS-USD", "SAND-USD", 
-    "MANA-USD", "SHIB-USD", "DOT-USD", # Añadidos algunos populares con USD si existen
-    "USDC-USD", # USDC directamente con USD
-    "USDT-USD" # USDT contra USD
+    "BTC-USDT", "ETH-USDT", "BNB-USDT", "XRP-USDT", "SOL-USDT", "ADA-USDT", 
+    "DOGE-USDT", "SHIB-USDT", "DOT-USDT", "LTC-USDT", "LINK-USDT", "MATIC-USDT",
+    "TRX-USDT", "AVAX-USDT", "UNI-USDT", "FIL-USDT", "ICP-USDT", "APT-USDT", 
+    "NEAR-USDT", "ATOM-USDT", "ARB-USDT", "OP-USDT", "IMX-USDT", 
+    "AAVE-USDT", "ALGO-USDT", "FTM-USDT", "VET-USDT", "CHZ-USDT", 
+    "GRT-USDT", "EOS-USDT", "SAND-USDT", "MANA-USDT",
+    # Stablecoins (ej. USDC-USDT)
+    "USDC-USDT", 
 ]
 
 
@@ -104,12 +104,12 @@ def update_last_recommendation_file(symbol, timestamp_iso, recommendation, sma_r
         writer.writeheader()
         writer.writerows(updated_rows)
 
-# --- FUNCIONES DE OBTENCIÓN DE DATOS (AHORA PARA COINBASE PRO) ---
-async def get_coinbase_klines(symbol, interval=COINBASE_PRO_INTERVAL, limit=COINBASE_PRO_LIMIT):
-    # Endpoint de Coinbase Pro para candles
-    # https://api.pro.coinbase.com/products/{product_id}/candles?granularity={granularity}&limit={limit}
-    # granularity = segundos (ej. 3600 para 1h)
-    url = f"https://api.pro.coinbase.com/products/{symbol}/candles?granularity={interval}&limit={limit}"
+# --- FUNCIONES DE OBTENCIÓN DE DATOS (AHORA PARA KUCOIN) ---
+async def get_kucoin_klines(symbol, interval=KUCOIN_INTERVAL, limit=KUCOIN_LIMIT):
+    # Endpoint de KuCoin para velas
+    # https://api.kucoin.com/api/v1/market/candles?symbol={symbol}&type={type}&limit={limit}
+    # type = "1min", "1hour", etc.
+    url = f"https://api.kucoin.com/api/v1/market/candles?symbol={symbol}&type={interval}&limit={limit}"
     
     try:
         async with httpx.AsyncClient() as client:
@@ -118,32 +118,32 @@ async def get_coinbase_klines(symbol, interval=COINBASE_PRO_INTERVAL, limit=COIN
             
             data = response.json()
             
-            if not data or not isinstance(data, list) or len(data) == 0:
-                raise ValueError(f"API de Coinbase Pro para {symbol} devolvió respuesta válida pero sin datos de velas.")
+            if not data or not data.get('data') or not isinstance(data['data'], list) or len(data['data']) == 0:
+                raise ValueError(f"API de KuCoin para {symbol} devolvió respuesta válida pero sin datos de velas.")
             
             formatted_prices = []
-            # Coinbase Pro devuelve: [timestamp, low, high, open, close, volume]
+            # KuCoin devuelve: [timestamp, open, close, high, low, volume, amount]
             # y el orden es del MÁS RECIENTE al MÁS ANTIGUO.
-            # Lo revertiremos al final.
-            for kline in data:
+            # Timestamp está en segundos.
+            for kline in data['data']:
                 formatted_prices.append({
-                    'x': int(kline[0]) * 1000, # Timestamp de segundos a milisegundos
-                    'y': float(kline[4])      # Precio de cierre
+                    'x': int(kline[0]) * 1000, # Timestamp de segundos a milisegundos para JS
+                    'y': float(kline[2])      # Precio de cierre (índice 2)
                 })
             
             return formatted_prices[::-1] # Revertir para que sea del más antiguo al más nuevo
 
     except httpx.HTTPStatusError as e:
-        print(f"Error HTTP de Coinbase Pro para {symbol}: {e.response.status_code} - {e.response.text}")
+        print(f"Error HTTP de KuCoin para {symbol}: {e.response.status_code} - {e.response.text}")
         return None
     except httpx.RequestError as e:
-        print(f"Error de red al conectar con Coinbase Pro para {symbol}: {e}")
+        print(f"Error de red al conectar con KuCoin para {symbol}: {e}")
         return None
     except ValueError as e:
-        print(f"Error de datos de Coinbase Pro para {symbol}: {e}")
+        print(f"Error de datos de KuCoin para {symbol}: {e}")
         return None
     except Exception as e:
-        print(f"Error inesperado al obtener datos de Coinbase Pro para {symbol}: {e}")
+        print(f"Error inesperado al obtener datos de KuCoin para {symbol}: {e}")
         return None
 
 
@@ -305,8 +305,8 @@ async def scheduled_analysis_job(symbols):
     for symbol in symbols:
         try:
             print(f"[{datetime.now().isoformat()}] Analyzing {symbol}...")
-            # CAMBIADO: Usar get_coinbase_klines
-            klines_data = await get_coinbase_klines(symbol) 
+            # CAMBIADO: Usar get_kucoin_klines
+            klines_data = await get_kucoin_klines(symbol) 
             
             min_required_klines = max(20, 50, 14) + 1 
             if not klines_data or len(klines_data) < min_required_klines:
@@ -464,8 +464,8 @@ async def get_latest_analysis(symbol):
     # Si no está en cache o no hay klines, intentar obtenerlos (esto es síncrono para la ruta, lo ideal es que la cache ya esté llena por el scheduler)
     print(f"[{datetime.now().isoformat()}] Cache miss for {symbol}, trying to fetch live. (This should be rare if scheduler runs)")
     try:
-        # CAMBIADO: Usar get_coinbase_klines
-        klines_data = await get_coinbase_klines(symbol) 
+        # CAMBIADO: Usar get_kucoin_klines
+        klines_data = await get_kucoin_klines(symbol) 
         
         # --- VALIDACIÓN DE DATOS PARA CÁLCULO (Duplicado del scheduler, pero necesario si el cache falla) ---
         min_required_klines = max(20, 50, 14) + 1 
@@ -510,44 +510,38 @@ scheduler = BackgroundScheduler()
 
 # LISTA DE SÍMBOLOS A MONITOREAR (¡Necesitas que esta lista coincida con tu frontend o se cargue de alguna manera!)
 SYMBOLS_TO_MONITOR = [
-    "BTC-USD", "ETH-USD", "SOL-USD", "ADA-USD", "DOGE-USD", 
-    "XRP-USD", "LTC-USD", "LINK-USD", "MATIC-USD", "TRX-USD",
-    "AVAX-USD", "UNI-USD", "FIL-USD", "ICP-USD", "APT-USD", 
-    "NEAR-USD", "ATOM-USD", "AAVE-USD", "ALGO-USD", "FTM-USD", 
-    "VET-USD", "CHZ-USD", "GRT-USD", "EOS-USD", "SAND-USD", 
-    "MANA-USD", "SHIB-USD", "DOT-USD", 
-    "USDC-USD", "USDT-USD" 
+    "BTC-USDT", "ETH-USDT", "BNB-USDT", "XRP-USDT", "SOL-USDT", "ADA-USDT", 
+    "DOGE-USDT", "SHIB-USDT", "DOT-USDT", "LTC-USDT", "LINK-USDT", "MATIC-USDT",
+    "TRX-USDT", "AVAX-USDT", "UNI-USDT", "FIL-USDT", "ICP-USDT", "APT-USDT", 
+    "SUI-USDT", "NEAR-USDT", "ATOM-USDT", "ARB-USDT", "OP-USDT", "IMX-USDT", # KuCoin tiene estos con -USDT
+    "AAVE-USDT", "ALGO-USDT", "FTM-USDT", "VET-USDT", "CHZ-USDT", "GRT-USDT",
+    "AXS-USDT", "EOS-USDT", "SAND-USDT", "MANA-USDT",
+    "USDC-USDT", # Stablecoin común en KuCoin
 ]
 
 # Añadir la tarea programada: Ejecuta 'scheduled_analysis_job' cada 2 minutos
 scheduler.add_job(
-    lambda: asyncio.run(scheduled_analysis_job(SYMBOLS_TO_MONITOR)), # Uso de asyncio.run
+    lambda: asyncio.run(scheduled_analysis_job(SYMBOLS_TO_MONITOR)), 
     'interval',
-    minutes=2, # Ejecuta la tarea cada 2 minutos
+    minutes=2, 
     id='full_crypto_analysis',
-    max_instances=1 # Asegura que solo una instancia de la tarea se ejecute a la vez
+    max_instances=1 
 )
 
 # Esto se ejecuta una vez cuando la aplicación Flask se inicia
-# Es crucial que se inicie el scheduler aquí para que las tareas en segundo plano empiecen.
-# Asegurarse de que el loop de asyncio esté corriendo para las tareas asíncronas.
 if not scheduler.running:
     scheduler.start()
     print("Scheduler started upon module load.")
-    # Ejecutar la tarea programada al inicio para poblar la cache lo antes posible
     print("Running initial scheduled job to populate cache.")
-    # Intentar ejecutar la tarea inicial en un bucle de eventos existente o crear uno
     try:
         loop = asyncio.get_running_loop()
-    except RuntimeError: # RuntimeError means no running loop
+    except RuntimeError: 
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
     
-    # Run the task in the event loop
     loop.run_until_complete(scheduled_analysis_job(SYMBOLS_TO_MONITOR))
 
 
 if __name__ == '__main__':
     print("Running Flask app in __main__ block (for local development).")
-    # Para ejecución local con 'python app.py', usar reloader=False para evitar doble ejecución del scheduler
     app.run(debug=True, host='0.0.0.0', port=5000, use_reloader=False)
