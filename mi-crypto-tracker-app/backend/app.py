@@ -7,7 +7,7 @@ from datetime import datetime, timedelta # Módulos para trabajar con fechas y t
 # 1. Inicialización de la Aplicación Flask
 # La instancia de tu aplicación Flask DEBE llamarse 'app'.
 # Gunicorn (el servidor que usa Render) busca específicamente un objeto llamado 'app' en este archivo.
-app = Flask(app)
+app = Flask(__name__)
 
 # 2. Configuración de CORS (Cross-Origin Resource Sharing)
 # Esto es CRÍTICO para que tu frontend (en GitHub Pages) pueda hacer solicitudes a tu backend (en Render).
