@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Crypto Tracker Online (Bybit - Indicadores Flexibles)</title>
+    <title>Crypto Tracker Online (Bybit + Backend)</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -384,7 +384,7 @@
         // URL BASE DE TU BACKEND (¡IMPORTANTE: Cambiar esto cuando lo publiques!)
         // Durante el desarrollo local, usa 'http://127.0.0.1:5000'
         // Después de publicar en Render, usa la URL que Render te dé (ej. 'https://tu-backend-nombre.onrender.com')
-        const BACKEND_URL = 'https://crypto-tracker-ukyl.onrender.com'; // ¡ACTUALIZADO CON TU URL DE RENDER!
+        const BACKEND_URL = 'https://crypto-tracker-ukyl.onrender.com'; 
 
         const BYBIT_INTERVAL = "60"; 
         const BYBIT_CATEGORY = "spot";
@@ -454,259 +454,9 @@
         }
 
         // ===================================================================================
-        // --- LÓGICA PRINCIPAL DE ANÁLISIS ---
-        // ===================================================================================
-
-        async function runSelectedCryptoAnalysis() {
-            console.log("Iniciando análisis para la criptomoneda seleccionada...");
-            if (countdownInterval) clearInterval(countdownInterval);
-
-            smaSignalDiv.textContent = 'Cargando...';
-            rsiSignalDiv.textContent = 'Cargando...';
-            bbSignalDiv.textContent = 'Cargando...';
-            smaSignalDiv.className = 'signal hold';
-            rsiSignalDiv.className = 'signal hold';
-            bbSignalDiv.className = 'signal hold';
-            updateTimerDiv.textContent = "";
-
-            priceNoDataMessage.style.display = 'none';
-            priceChartCanvas.style.display = 'block';
-
-            const selectedSymbol = coinSelect.value;
-            if (!selectedSymbol) {
-                console.warn("No hay criptomoneda seleccionada para el análisis detallado (o la lista está vacía).");
-                if (priceChartInstance) priceChartInstance.destroy();
-                priceChartCanvas.style.display = 'none'; 
-                priceNoDataMessage.textContent = "No hay criptomoneda seleccionada o datos iniciales."
-                priceNoDataMessage.style.display = 'flex'; 
-                return;
-            }
-            console.log(`Obteniendo datos de Bybit para: ${selectedSymbol}`);
-
-            const prices = await getCryptoData(selectedSymbol, BYBIT_INTERVAL, BYBIT_CATEGORY, BYBIT_LIMIT);
-            
-            const minRequiredData = Math.max(SMA_LONG_PERIOD, BB_PERIOD, RSI_PERIOD);
-            if (!prices || prices.length < minRequiredData) {
-                console.error(`Datos insuficientes para calcular indicadores de ${selectedSymbol}. Se necesitan al menos ${minRequiredData} puntos, se obtuvieron ${prices ? prices.length : 0}.`, prices);
-                smaSignalDiv.textContent = 'Error: Datos insuficientes.';
-                rsiSignalDiv.textContent = 'Error: Datos insuficientes.';
-                bbSignalDiv.textContent = 'Error: Datos insuficientes.';
-                updateTimerDiv.textContent = "Datos insuficientes para indicadores";
-                
-                if (priceChartInstance) priceChartInstance.destroy();
-                priceChartCanvas.style.display = 'none';
-                priceNoDataMessage.textContent = "Datos insuficientes para gráficos."
-                priceNoDataMessage.style.display = 'flex';
-                return;
-            }
-
-            console.log(`Datos recibidos para ${selectedSymbol}. Número de puntos: ${prices.length}`);
-
-            currentPriceDataCache = prices; 
-            const closingPrices = prices.map(p => p.y);
-
-            console.log("Calculando indicadores para la cripto seleccionada...");
-            currentSmaShortCache = calculateSMA(closingPrices, SMA_SHORT_PERIOD);
-            currentSmaLongCache = calculateSMA(closingPrices, SMA_LONG_PERIOD);
-            currentBollingerBandsCache = calculateBollingerBands(closingPrices, BB_PERIOD, BB_STD_DEV);
-            currentRsiCache = calculateRSI(closingPrices, RSI_PERIOD); 
-            
-            console.log("Renderizando gráficos para la cripto seleccionada...");
-            renderPriceChart(currentPriceDataCache, currentSmaShortCache, currentSmaLongCache, currentBollingerBandsCache, currentRsiCache);
-            
-            console.log("Actualizando señales individuales...");
-            const signals = updateSignals(currentSmaShortCache, currentSmaLongCache, currentRsiCache, currentBollingerBandsCache, closingPrices);
-            
-            // Guardar esta recomendación en el backend
-            await saveRecommendationToBackend(selectedSymbol, signals.overall);
-
-            startUpdateTimer(UPDATE_INTERVAL_SELECTED_CRYPTO / 1000);
-            console.log("Análisis de criptomoneda seleccionada completado.");
-        }
-
-        async function updateAllCryptosOpportunities() {
-            if (isProcessingAllCryptos) {
-                console.log("Ya se está procesando el análisis de todas las criptos. Saltando esta ejecución.");
-                return;
-            }
-            if (allCryptos.length === 0) {
-                 console.warn("No hay criptomonedas en la lista estática para actualizar las oportunidades.");
-                 renderOpportunityColumns({ buy: [], sell: [], hold: [], error: ['No hay criptos para mostrar.'] });
-                 return;
-            }
-
-            isProcessingAllCryptos = true;
-            console.log("Iniciando análisis para TODAS las criptomonedas (carga progresiva)...");
-
-            const tempRecommendations = { buy: [], sell: [], hold: [], error: [] }; 
-            renderOpportunityColumns(tempRecommendations);
-
-            for (let i = 0; i < allCryptos.length; i++) {
-                const symbol = allCryptos[i];
-
-                try {
-                    const prices = await getCryptoData(symbol, BYBIT_INTERVAL, BYBIT_CATEGORY, BYBIT_LIMIT);
-
-                    const minRequiredData = Math.max(SMA_LONG_PERIOD, BB_PERIOD, RSI_PERIOD);
-                    if (!prices || prices.length < minRequiredData) {
-                        console.warn(`[Todas las Cryptos] Datos insuficientes para ${symbol}.`);
-                        tempRecommendations.hold.push(`${symbol} (Datos Insuficientes)`); 
-                    } else {
-                        const closingPrices = prices.map(p => p.y);
-                        const smaShort = calculateSMA(closingPrices, SMA_SHORT_PERIOD);
-                        const smaLong = calculateSMA(closingPrices, SMA_LONG_PERIOD);
-                        const bollingerBands = calculateBollingerBands(closingPrices, BB_PERIOD, BB_STD_DEV);
-                        const rsi = calculateRSI(closingPrices, RSI_PERIOD);
-
-                        const signals = getCombinedSignals(smaShort, smaLong, rsi, bollingerBands, closingPrices);
-                        
-                        if (signals.overall === 'buy') {
-                            tempRecommendations.buy.push(symbol);
-                        } else if (signals.overall === 'sell') {
-                            tempRecommendations.sell.push(symbol);
-                        } else {
-                            tempRecommendations.hold.push(symbol);
-                        }
-                    }
-
-                } catch (error) {
-                    console.error(`[Todas las Cryptos] Error al procesar ${symbol}:`, error);
-                    tempRecommendations.hold.push(`${symbol} (Error)`); 
-                }
-
-                renderOpportunityColumns(tempRecommendations);
-
-                if (i < allCryptos.length - 1) {
-                    await new Promise(resolve => setTimeout(resolve, ALL_CRYPTOS_API_DELAY));
-                }
-            }
-            isProcessingAllCryptos = false;
-            console.log("Análisis de TODAS las criptomonedas completado.");
-        }
-
-        // Función auxiliar para obtener la recomendación combinada
-        function getCombinedSignals(smaShort, smaLong, rsi, bollingerBands, closingPrices) {
-            let smaRec = 'hold';
-            let rsiRec = 'hold';
-            let bbRec = 'hold';
-
-            const validSmaShort = smaShort.filter(v => v !== null);
-            const validSmaLong = smaLong.filter(v => v !== null);
-            if (validSmaShort.length >= 2 && validSmaLong.length >= 2) {
-                const lastSmaShort = validSmaShort[validSmaShort.length - 1].y;
-                const prevSmaShort = validSmaShort[validSmaShort.length - 2].y;
-                const lastSmaLong = validSmaLong[validSmaLong.length - 1].y;
-                const prevSmaLong = validSmaLong[validSmaLong.length - 2].y;
-                if (prevSmaShort <= prevSmaLong && lastSmaShort > lastSmaLong) smaRec = 'buy';
-                else if (prevSmaShort >= prevSmaLong && lastSmaShort < lastSmaLong) smaRec = 'sell';
-            }
-
-            const validRsi = rsi.filter(v => v !== null);
-            if (validRsi.length > 0) {
-                const lastRsi = validRsi[validRsi.length - 1].y;
-                if (lastRsi > RSI_OVERBOUGHT) rsiRec = 'sell';
-                else if (lastRsi < RSI_OVERSOLD) rsiRec = 'buy';
-            }
-
-            const validBbUpper = bollingerBands.upper.filter(v => v !== null);
-            const validBbLower = bollingerBands.lower.filter(v => v !== null);
-            const lastPrice = closingPrices[closingPrices.length - 1]; 
-
-            if (validBbUpper.length > 0 && validBbLower.length > 0 && lastPrice !== undefined) {
-                const lastBbUpper = validBbUpper[validBbUpper.length - 1].y;
-                const lastBbLower = validBbLower[validBbLower.length - 1].y;
-                if (lastPrice > lastBbUpper) bbRec = 'sell';
-                else if (lastPrice < lastBbLower) bbRec = 'buy';
-            }
-
-            let buyCount = 0;
-            let sellCount = 0;
-
-            if (smaRec === 'buy') buyCount++;
-            if (rsiRec === 'buy') buyCount++;
-            if (bbRec === 'buy') buyCount++;
-
-            if (smaRec === 'sell') sellCount++;
-            if (rsiRec === 'sell') sellCount++;
-            if (bbRec === 'sell') sellCount++;
-
-            let overallRecommendation = 'hold';
-            if (buyCount > sellCount) overallRecommendation = 'buy';
-            else if (sellCount > buyCount) overallRecommendation = 'sell';
-            
-            return { sma: smaRec, rsi: rsiRec, bb: bbRec, overall: overallRecommendation };
-        }
-
-
-        document.addEventListener('DOMContentLoaded', async () => {
-            initStaticCryptoList(); 
-
-            if (allCryptos.length > 0) {
-                runSelectedCryptoAnalysis();
-                updateAllCryptosOpportunities();
-                loadHistoricalRecommendationsFromBackend(); // Cargar historial al inicio
-
-                setInterval(runSelectedCryptoAnalysis, UPDATE_INTERVAL_SELECTED_CRYPTO);
-                setInterval(updateAllCryptosOpportunities, UPDATE_INTERVAL_ALL_CRYPTOS); 
-                setInterval(loadHistoricalRecommendationsFromBackend, HISTORY_UPDATE_INTERVAL); // Actualizar historial
-            } else {
-                console.error("No se encontraron criptomonedas en la lista estática. La aplicación no puede iniciar correctamente.");
-                priceNoDataMessage.textContent = "Error: No se encontraron criptomonedas en la lista.";
-                priceNoDataMessage.style.display = 'flex';
-                renderOpportunityColumns({ buy: [], sell: [], hold: [], error: ['No hay criptos en la lista.'] });
-            }
-        });
-
-        coinSelect.addEventListener('change', runSelectedCryptoAnalysis);
-
-        const indicatorCheckboxes = document.querySelectorAll('#indicator-selection-panel input[type="checkbox"]');
-        indicatorCheckboxes.forEach(checkbox => {
-            checkbox.addEventListener('change', () => {
-                if (currentPriceDataCache) { // Solo redibujar si hay datos en caché
-                    renderPriceChart(currentPriceDataCache, currentSmaShortCache, currentSmaLongCache, currentBollingerBandsCache, currentRsiCache);
-                } else {
-                    console.warn("No hay datos en caché para redibujar el gráfico con los indicadores.");
-                }
-            });
-        });
-
-        // ===================================================================================
-        // --- FUNCIONES DE OBTENCIÓN DE DATOS (BYBIT API) ---
-        // ===================================================================================
-
-        async function getCryptoData(symbol, interval = "60", category = "spot", limit = 200) {
-            const url = `https://api.bybit.com/v5/market/kline?category=${category}&symbol=${symbol}&interval=${interval}&limit=${limit}`;
-
-            try {
-                const response = await fetch(url);
-                if (!response.ok) {
-                    const errorDetails = await response.text();
-                    throw new Error(`Error de red de Bybit para ${symbol}: ${response.status} - ${response.statusText}. Detalles: ${errorDetails.substring(0, Math.min(errorDetails.length, 200))}...`);
-                }
-                
-                const data = await response.json();
-                
-                if (!data || !data.result || !data.result.list || data.result.list.length === 0) {
-                    throw new Error(`La API de Bybit para ${symbol} devolvió una respuesta válida pero sin datos de klines.`);
-                }
-                
-                const formattedPrices = data.result.list.map(kline => ({
-                    x: parseInt(kline[0]),
-                    y: parseFloat(kline[4])
-                }));
-
-                return formattedPrices.reverse(); 
-
-            } catch (error) {
-                console.error(`Error al obtener datos de la API de Bybit para ${symbol}:`, error);
-                return null;
-            }
-        }
-
-        // ===================================================================================
         // --- FUNCIONES DE CÁLCULO DE INDICADORES ---
+        // DEBEN estar definidas antes de ser llamadas.
         // ===================================================================================
-
         function calculateSMA(data, period) {
             let sma = [];
             for (let i = 0; i < data.length; i++) {
@@ -792,7 +542,368 @@
         }
 
         // ===================================================================================
+        // --- FUNCIONES DE OBTENCIÓN DE DATOS (BYBIT API) ---
+        // DEBEN estar definidas antes de las funciones de análisis principal.
+        // ===================================================================================
+        async function getCryptoData(symbol, interval = "60", category = "spot", limit = 200) {
+            const url = `https://api.bybit.com/v5/market/kline?category=${category}&symbol=${symbol}&interval=${interval}&limit=${limit}`;
+
+            try {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    const errorDetails = await response.text();
+                    throw new Error(`Error de red de Bybit para ${symbol}: ${response.status} - ${response.statusText}. Detalles: ${errorDetails.substring(0, Math.min(errorDetails.length, 200))}...`);
+                }
+                
+                const data = await response.json();
+                
+                if (!data || !data.result || !data.result.list || data.result.list.length === 0) {
+                    throw new Error(`La API de Bybit para ${symbol} devolvió una respuesta válida pero sin datos de klines.`);
+                }
+                
+                const formattedPrices = data.result.list.map(kline => ({
+                    x: parseInt(kline[0]),
+                    y: parseFloat(kline[4])
+                }));
+
+                return formattedPrices.reverse(); 
+
+            } catch (error) {
+                console.error(`Error al obtener datos de la API de Bybit para ${symbol}:`, error);
+                return null;
+            }
+        }
+        
+        // ===================================================================================
+        // --- FUNCIONES DE RENDERING Y ACTUALIZACIÓN DE PANELES ---
+        // DEBEN estar definidas ANTES de ser llamadas por runSelectedCryptoAnalysis o updateAllCryptosOpportunities
+        // ===================================================================================
+
+        /**
+         * Dibuja o actualiza el gráfico principal de precios, y los indicadores seleccionados.
+         * @param {Array<object>} priceData - Datos de precio en formato { x: timestamp, y: price }.
+         * @param {Array<object|null>} smaShort - Datos de la SMA corta.
+         * @param {Array<object|null>} smaLong - Datos de la SMA larga.
+         * @param {object} bb - Objeto con datos de Bandas de Bollinger (upper, middle, lower).
+         * @param {Array<object|null>} rsi - Datos del RSI.
+         */
+        function renderPriceChart(priceData, smaShort, smaLong, bb, rsi) {
+            if (priceChartInstance) priceChartInstance.destroy();
+
+            const ctx = priceChartCanvas.getContext('2d');
+            const datasets = [
+                { 
+                    label: 'Precio (USD)', 
+                    data: priceData, 
+                    borderColor: '#36a2eb', 
+                    borderWidth: 2.5, 
+                    pointRadius: 0, 
+                    tension: 0.1, 
+                    fill: false,
+                    yAxisID: 'y-price' 
+                }
+            ];
+
+            if (toggleSmaShort.checked) {
+                datasets.push({ 
+                    label: `SMA ${SMA_SHORT_PERIOD}`, 
+                    data: smaShort.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null), 
+                    borderColor: '#ffce56', 
+                    borderWidth: 1.5, 
+                    pointRadius: 0, 
+                    fill: false,
+                    yAxisID: 'y-price' 
+                });
+            }
+            if (toggleSmaLong.checked) {
+                datasets.push({ 
+                    label: `SMA ${SMA_LONG_PERIOD}`, 
+                    data: smaLong.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null), 
+                    borderColor: '#ff6384', 
+                    borderWidth: 1.5, 
+                    pointRadius: 0, 
+                    fill: false,
+                    yAxisID: 'y-price' 
+                });
+            }
+            
+            if (toggleBbUpper.checked) {
+                datasets.push({ 
+                    label: `BB Superior`, 
+                    data: bb.upper.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null), 
+                    borderColor: 'rgba(153, 102, 255, 0.5)', 
+                    borderWidth: 1, 
+                    pointRadius: 0, 
+                    fill: false,
+                    yAxisID: 'y-price' 
+                });
+            }
+            if (toggleBbLower.checked) {
+                datasets.push({ 
+                    label: `BB Inferior`, 
+                    data: bb.lower.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null), 
+                    borderColor: 'rgba(153, 102, 255, 0.5)', 
+                    borderWidth: 1, 
+                    pointRadius: 0, 
+                    fill: '-1',
+                    backgroundColor: 'rgba(153, 102, 255, 0.1)',
+                    hidden: false,
+                    yAxisID: 'y-price' 
+                });
+            }
+            if (toggleBbMiddle.checked) {
+                datasets.push({ 
+                    label: `BB Media`, 
+                    data: bb.middle.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null), 
+                    borderColor: 'rgba(153, 102, 255, 0.8)', 
+                    borderWidth: 1.5, 
+                    pointRadius: 0, 
+                    borderDash: [5, 5], 
+                    fill: false,
+                    yAxisID: 'y-price' 
+                });
+            }
+
+            if (toggleRsi.checked) {
+                datasets.push({
+                    label: `RSI (${RSI_PERIOD})`,
+                    data: rsi.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null),
+                    borderColor: '#4bc0c0', 
+                    borderWidth: 1.5,
+                    pointRadius: 0,
+                    fill: false,
+                    yAxisID: 'y-rsi' 
+                });
+            }
+
+            priceChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    scales: {
+                        x: { 
+                            type: 'time', 
+                            time: { 
+                                unit: 'hour', 
+                                tooltipFormat: 'HH:mm dd/MM/yy',
+                                displayFormats: {
+                                    hour: 'HH:mm',
+                                    day: 'dd/MM'
+                                }
+                            },
+                            title: { display: true, text: 'Fecha/Hora', color: '#e0e0e0' },
+                            ticks: { color: '#e0e0e0' },
+                            grid: { color: '#333' }
+                        },
+                        'y-price': { 
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: { display: true, text: 'Precio (USD)', color: '#e0e0e0' },
+                            ticks: { color: '#e0e0e0' },
+                            grid: { color: '#333' }
+                        },
+                        'y-rsi': { 
+                            type: 'linear',
+                            display: toggleRsi.checked, 
+                            position: 'right',
+                            min: 0,
+                            max: 100,
+                            title: { display: true, text: 'RSI', color: '#4bc0c0' },
+                            ticks: { color: '#4bc0c0' },
+                            grid: { drawOnChartArea: false } 
+                        }
+                    },
+                    plugins: {
+                        tooltip: { mode: 'index', intersect: false },
+                        legend: { labels: { color: '#e0e0e0' } },
+                        annotation: {
+                            annotations: {
+                                rsiOverboughtLine: { 
+                                    type: 'line', 
+                                    yMin: RSI_OVERBOUGHT, 
+                                    yMax: RSI_OVERBOUGHT, 
+                                    borderColor: 'red', 
+                                    borderWidth: 1, 
+                                    borderDash: [5, 5], 
+                                    yAxisID: 'y-rsi', 
+                                    label: { 
+                                        content: 'Sobrecompra', enabled: toggleRsi.checked, position: 'start', 
+                                        color: '#e0e0e0', backgroundColor: 'rgba(255, 0, 0, 0.5)'
+                                    } 
+                                },
+                                rsiOversoldLine: { 
+                                    type: 'line', 
+                                    yMin: RSI_OVERSOLD, 
+                                    yMax: RSI_OVERSOLD, 
+                                    borderColor: 'green', 
+                                    borderWidth: 1, 
+                                    borderDash: [5, 5], 
+                                    yAxisID: 'y-rsi', 
+                                    label: { 
+                                        content: 'Sobreventa', enabled: toggleRsi.checked, position: 'start', 
+                                        color: '#e0e0e0', backgroundColor: 'rgba(0, 128, 0, 0.5)'
+                                    } 
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            console.log("Gráfico de precios con indicadores renderizado.");
+        }
+        
+        function updateSignals(smaShort, smaLong, rsi, bollingerBands, closingPrices) {
+            smaSignalDiv.classList.remove('alert-buy', 'alert-sell');
+            rsiSignalDiv.classList.remove('alert-buy', 'alert-sell');
+            bbSignalDiv.classList.remove('alert-buy', 'alert-sell');
+
+            let smaRec = 'hold';
+            let rsiRec = 'hold';
+            let bbRec = 'hold';
+
+            const validSmaShort = smaShort.filter(v => v !== null);
+            const validSmaLong = smaLong.filter(v => v !== null);
+
+            if (validSmaShort.length >= 2 && validSmaLong.length >= 2) {
+                const lastSmaShort = validSmaShort[validSmaShort.length - 1].y;
+                const prevSmaShort = validSmaShort[validSmaShort.length - 2].y;
+                const lastSmaLong = validSmaLong[validSmaLong.length - 1].y;
+                const prevSmaLong = validSmaLong[validSmaLong.length - 2].y;
+
+                if (prevSmaShort <= prevSmaLong && lastSmaShort > lastSmaLong) {
+                    smaSignalDiv.textContent = 'Cruce SMA: COMPRA 📈 (Corto > Largo)';
+                    smaSignalDiv.className = 'signal buy alert-buy';
+                } else if (prevSmaShort >= prevSmaLong && lastSmaShort < lastSmaLong) {
+                    smaSignalDiv.textContent = 'Cruce SMA: VENTA 📉 (Corto < Largo)';
+                    smaSignalDiv.className = 'signal sell alert-sell';
+                } else {
+                    smaSignalDiv.textContent = 'Cruce SMA: Mantener 😐';
+                    smaSignalDiv.className = 'signal hold';
+                }
+            } else {
+                smaSignalDiv.textContent = 'Cruce SMA: Datos insuficientes';
+                smaSignalDiv.className = 'signal hold';
+            }
+
+            const validRsi = rsi.filter(v => v !== null);
+            if (validRsi.length > 0) {
+                const lastRsi = validRsi[validRsi.length - 1].y;
+                if (lastRsi > RSI_OVERBOUGHT) {
+                    rsiSignalDiv.textContent = `RSI (${lastRsi.toFixed(1)}): Sobrecompra ⚠️`;
+                    rsiSignalDiv.className = 'signal overbought alert-sell';
+                } else if (lastRsi < RSI_OVERSOLD) {
+                    rsiSignalDiv.textContent = `RSI (${lastRsi.toFixed(1)}): Sobreventa ✅`;
+                    rsiSignalDiv.className = 'signal oversold alert-buy';
+                } else {
+                    rsiSignalDiv.textContent = `RSI (${lastRsi.toFixed(1)}): Neutral ⚖️`;
+                    rsiSignalDiv.className = 'signal hold';
+                }
+            } else {
+                rsiSignalDiv.textContent = 'RSI: Datos insuficientes';
+                rsiSignalDiv.className = 'signal hold';
+            }
+
+            const validBbUpper = bollingerBands.upper.filter(v => v !== null);
+            const validBbLower = bollingerBands.lower.filter(v => v !== null);
+            const lastPrice = closingPrices[closingPrices.length - 1]; 
+
+            if (validBbUpper.length > 0 && validBbLower.length > 0 && lastPrice !== undefined) {
+                const lastBbUpper = validBbUpper[validBbUpper.length - 1].y;
+                const lastBbLower = validBbLower[validBbLower.length - 1].y;
+                
+                if (lastPrice > lastBbUpper) {
+                    bbSignalDiv.textContent = `BB: Precio sobre banda superior ⬆️ (Venta)`;
+                    bbSignalDiv.className = 'signal sell alert-sell';
+                } else if (lastPrice < lastBbLower) {
+                    bbSignalDiv.textContent = `BB: Precio bajo banda inferior ⬇️ (Compra)`;
+                    bbSignalDiv.className = 'signal buy alert-buy';
+                } else {
+                    bbSignalDiv.textContent = 'BB: Precio dentro de la banda 🔄';
+                    bbSignalDiv.className = 'signal hold';
+                }
+            } else {
+                bbSignalDiv.textContent = 'BB: Datos insuficientes';
+                bbSignalDiv.className = 'signal hold';
+            }
+            console.log("Señales individuales actualizadas.");
+        }
+        
+        /**
+         * Función central para renderizar las 3 columnas de oportunidades en el DOM.
+         * Se llama repetidamente durante la carga progresiva.
+         * @param {object} recommendationsMap - Un objeto con arrays de símbolos para 'buy', 'sell', 'hold', 'error'.
+         */
+        function renderOpportunityColumns(recommendationsMap) {
+            buyList.innerHTML = '';
+            sellList.innerHTML = '';
+            holdList.innerHTML = '';
+
+            const hasData = recommendationsMap.buy.length > 0 || recommendationsMap.sell.length > 0 || recommendationsMap.hold.length > 0 || recommendationsMap.error.length > 0;
+            
+            if (!hasData && isProcessingAllCryptos) {
+                 buyList.innerHTML = '<li>Cargando...</li>';
+                 sellList.innerHTML = '<li>Cargando...</li>';
+                 holdList.innerHTML = '<li>Cargando...</li>';
+                 return;
+            }
+
+            recommendationsMap.buy.sort().forEach(symbol => {
+                const li = document.createElement('li');
+                li.textContent = symbol;
+                buyList.appendChild(li);
+            });
+            if (recommendationsMap.buy.length === 0 && hasData) buyList.innerHTML = '<li>Ninguna</li>';
+
+
+            recommendationsMap.sell.sort().forEach(symbol => {
+                const li = document.createElement('li');
+                li.textContent = symbol;
+                sellList.appendChild(li);
+            });
+            if (recommendationsMap.sell.length === 0 && hasData) sellList.innerHTML = '<li>Ninguna</li>';
+
+
+            const allHoldSymbols = [...recommendationsMap.hold, ...recommendationsMap.error];
+            allHoldSymbols.sort().forEach(symbol => {
+                const li = document.createElement('li');
+                li.textContent = symbol;
+                holdList.appendChild(li);
+            });
+            if (allHoldSymbols.length === 0 && hasData) holdList.innerHTML = '<li>Ninguna</li>';
+
+            if (!hasData && !isProcessingAllCryptos) {
+                buyList.innerHTML = '<li>Error al cargar cryptos.</li>';
+                sellList.innerHTML = '<li>Error al cargar cryptos.</li>';
+                holdList.innerHTML = '<li>Error al cargar cryptos.</li>';
+            }
+        }
+
+        function startUpdateTimer(seconds) {
+            let remaining = seconds;
+            updateTimerDiv.textContent = `Próxima actualización de gráficos en ${remaining}s...`;
+            countdownInterval = setInterval(() => {
+                remaining--;
+                if (remaining >= 0) {
+                    updateTimerDiv.textContent = `Próxima actualización de gráficos en ${remaining}s...`;
+                }
+                if (remaining <= 0) {
+                    clearInterval(countdownInterval);
+                }
+            }, 1000);
+        }
+
+        // ===================================================================================
         // --- FUNCIONES DE PERSISTENCIA (INTERACCIÓN CON BACKEND) ---
+        // DEBEN estar definidas antes de las funciones de análisis principal.
         // ===================================================================================
 
         async function saveRecommendationToBackend(symbol, recommendation) {
@@ -812,7 +923,6 @@
                 });
 
                 if (!response.ok) {
-                    // Si el servidor responde con un error HTTP (ej. 400, 500)
                     const errorText = await response.text();
                     throw new Error(`Error HTTP al guardar en backend: ${response.status} - ${response.statusText}. Detalles: ${errorText}`);
                 }
@@ -832,7 +942,7 @@
                     const errorText = await response.text();
                     throw new Error(`Error HTTP al cargar historial desde backend: ${response.status} - ${response.statusText}. Detalles: ${errorText}`);
                 }
-                const history = await response.json(); // Se espera un array de objetos
+                const history = await response.json();
 
                 backendHistoricalList.innerHTML = '';
                 if (history.length === 0) {
@@ -871,6 +981,234 @@
                 backendHistoricalList.innerHTML = `<li>Error al cargar historial: ${error.message}</li>`;
             }
         }
+
+        // ===================================================================================
+        // --- LÓGICA PRINCIPAL DE ANÁLISIS ---
+        // Estas funciones deben estar al final o al menos después de todas las utilidades que llaman.
+        // ===================================================================================
+
+        async function runSelectedCryptoAnalysis() {
+            console.log("Inicio de runSelectedCryptoAnalysis."); // Log de inicio
+            if (countdownInterval) clearInterval(countdownInterval);
+
+            smaSignalDiv.textContent = 'Cargando...';
+            rsiSignalDiv.textContent = 'Cargando...';
+            bbSignalDiv.textContent = 'Cargando...';
+            smaSignalDiv.className = 'signal hold';
+            rsiSignalDiv.className = 'signal hold';
+            bbSignalDiv.className = 'signal hold';
+            updateTimerDiv.textContent = "";
+
+            priceNoDataMessage.style.display = 'none';
+            priceChartCanvas.style.display = 'block';
+
+            const selectedSymbol = coinSelect.value;
+            if (!selectedSymbol) {
+                console.warn("No hay criptomoneda seleccionada para el análisis detallado (o la lista está vacía).");
+                if (priceChartInstance) priceChartInstance.destroy();
+                priceChartCanvas.style.display = 'none'; 
+                priceNoDataMessage.textContent = "No hay criptomoneda seleccionada o datos iniciales."
+                priceNoDataMessage.style.display = 'flex'; 
+                return;
+            }
+            console.log(`runSelectedCryptoAnalysis: Obteniendo datos de Bybit para: ${selectedSymbol}`);
+
+            const prices = await getCryptoData(selectedSymbol, BYBIT_INTERVAL, BYBIT_CATEGORY, BYBIT_LIMIT);
+            
+            const minRequiredData = Math.max(SMA_LONG_PERIOD, BB_PERIOD, RSI_PERIOD);
+            if (!prices || prices.length < minRequiredData) {
+                console.error(`runSelectedCryptoAnalysis: Datos insuficientes para calcular indicadores de ${selectedSymbol}. Se necesitan al menos ${minRequiredData} puntos, se obtuvieron ${prices ? prices.length : 0}.`, prices);
+                smaSignalDiv.textContent = 'Error: Datos insuficientes.';
+                rsiSignalDiv.textContent = 'Error: Datos insuficientes.';
+                bbSignalDiv.textContent = 'Error: Datos insuficientes.';
+                updateTimerDiv.textContent = "Datos insuficientes para indicadores";
+                
+                if (priceChartInstance) priceChartInstance.destroy();
+                priceChartCanvas.style.display = 'none';
+                priceNoDataMessage.textContent = "Datos insuficientes para gráficos."
+                priceNoDataMessage.style.display = 'flex';
+                return;
+            }
+
+            console.log(`runSelectedCryptoAnalysis: Datos recibidos para ${selectedSymbol}. Número de puntos: ${prices.length}`);
+
+            currentPriceDataCache = prices; 
+            const closingPrices = prices.map(p => p.y);
+
+            console.log("runSelectedCryptoAnalysis: Calculando indicadores para la cripto seleccionada...");
+            currentSmaShortCache = calculateSMA(closingPrices, SMA_SHORT_PERIOD);
+            currentSmaLongCache = calculateSMA(closingPrices, SMA_LONG_PERIOD);
+            currentBollingerBandsCache = calculateBollingerBands(closingPrices, BB_PERIOD, BB_STD_DEV);
+            currentRsiCache = calculateRSI(closingPrices, RSI_PERIOD); 
+            
+            console.log("runSelectedCryptoAnalysis: Renderizando gráficos para la cripto seleccionada...");
+            renderPriceChart(currentPriceDataCache, currentSmaShortCache, currentSmaLongCache, currentBollingerBandsCache, currentRsiCache);
+            
+            console.log("runSelectedCryptoAnalysis: Actualizando señales individuales...");
+            const signals = updateSignals(currentSmaShortCache, currentSmaLongCache, currentRsiCache, currentBollingerBandsCache, closingPrices);
+            
+            console.log("runSelectedCryptoAnalysis: Intentando guardar recomendación en backend..."); // Log antes de guardar
+            await saveRecommendationToBackend(selectedSymbol, signals.overall); // Se guarda la recomendación
+            console.log("runSelectedCryptoAnalysis: Recomendación enviada a backend."); // Log después de guardar
+
+            startUpdateTimer(UPDATE_INTERVAL_SELECTED_CRYPTO / 1000);
+            console.log("Análisis de criptomoneda seleccionada completado.");
+        }
+
+        async function updateAllCryptosOpportunities() {
+            console.log("Inicio de updateAllCryptosOpportunities."); // Log de inicio
+            if (isProcessingAllCryptos) {
+                console.log("Ya se está procesando el análisis de todas las criptos. Saltando esta ejecución.");
+                return;
+            }
+            if (allCryptos.length === 0) {
+                 console.warn("No hay criptomonedas en la lista estática para actualizar las oportunidades.");
+                 renderOpportunityColumns({ buy: [], sell: [], hold: [], error: ['No hay criptos para mostrar.'] });
+                 return;
+            }
+
+            isProcessingAllCryptos = true;
+            console.log("updateAllCryptosOpportunities: Iniciando análisis para TODAS las criptomonedas (carga progresiva)...");
+
+            const tempRecommendations = { buy: [], sell: [], hold: [], error: [] }; 
+            renderOpportunityColumns(tempRecommendations); // Renderiza los mensajes iniciales
+
+            for (let i = 0; i < allCryptos.length; i++) {
+                const symbol = allCryptos[i];
+                console.log(`updateAllCryptosOpportunities: Procesando ${symbol} (${i + 1}/${allCryptos.length}).`); // Log por crypto
+
+                try {
+                    const prices = await getCryptoData(symbol, BYBIT_INTERVAL, BYBIT_CATEGORY, BYBIT_LIMIT);
+
+                    const minRequiredData = Math.max(SMA_LONG_PERIOD, BB_PERIOD, RSI_PERIOD);
+                    if (!prices || prices.length < minRequiredData) {
+                        console.warn(`updateAllCryptosOpportunities: Datos insuficientes para ${symbol}.`);
+                        tempRecommendations.hold.push(`${symbol} (Datos Insuficientes)`); 
+                    } else {
+                        const closingPrices = prices.map(p => p.y);
+                        const smaShort = calculateSMA(closingPrices, SMA_SHORT_PERIOD);
+                        const smaLong = calculateSMA(closingPrices, SMA_LONG_PERIOD);
+                        const bollingerBands = calculateBollingerBands(closingPrices, BB_PERIOD, BB_STD_DEV);
+                        const rsi = calculateRSI(closingPrices, RSI_PERIOD);
+
+                        const signals = getCombinedSignals(smaShort, smaLong, rsi, bollingerBands, closingPrices);
+                        
+                        if (signals.overall === 'buy') {
+                            tempRecommendations.buy.push(symbol);
+                        } else if (signals.overall === 'sell') {
+                            tempRecommendations.sell.push(symbol);
+                        } else {
+                            tempRecommendations.hold.push(symbol);
+                        }
+                    }
+
+                } catch (error) {
+                    console.error(`updateAllCryptosOpportunities: Error al procesar ${symbol}:`, error);
+                    tempRecommendations.hold.push(`${symbol} (Error)`); 
+                }
+
+                renderOpportunityColumns(tempRecommendations);
+
+                if (i < allCryptos.length - 1) {
+                    await new Promise(resolve => setTimeout(resolve, ALL_CRYPTOS_API_DELAY));
+                }
+            }
+            isProcessingAllCryptos = false;
+            console.log("Análisis de TODAS las criptomonedas completado.");
+        }
+
+        // Función auxiliar para obtener la recomendación combinada
+        function getCombinedSignals(smaShort, smaLong, rsi, bollingerBands, closingPrices) {
+            let smaRec = 'hold';
+            let rsiRec = 'hold';
+            let bbRec = 'hold';
+
+            const validSmaShort = smaShort.filter(v => v !== null);
+            const validSmaLong = smaLong.filter(v => v !== null);
+            if (validSmaShort.length >= 2 && validSmaLong.length >= 2) {
+                const lastSmaShort = validSmaShort[validSmaShort.length - 1].y;
+                const prevSmaShort = validSmaShort[validSmaShort.length - 2].y;
+                const lastSmaLong = validSmaLong[validSmaLong.length - 1].y;
+                const prevSmaLong = validSmaLong[validSmaLong.length - 2].y;
+                if (prevSmaShort <= prevSmaLong && lastSmaShort > lastSmaLong) smaRec = 'buy';
+                else if (prevSmaShort >= prevSmaLong && lastSmaLong < lastSmaLong) smaRec = 'sell';
+            }
+
+            const validRsi = rsi.filter(v => v !== null);
+            if (validRsi.length > 0) {
+                const lastRsi = validRsi[validRsi.length - 1].y;
+                if (lastRsi > RSI_OVERBOUGHT) rsiRec = 'sell';
+                else if (lastRsi < RSI_OVERSOLD) rsiRec = 'buy';
+            }
+
+            const validBbUpper = bollingerBands.upper.filter(v => v !== null);
+            const validBbLower = bollingerBands.lower.filter(v => v !== null);
+            const lastPrice = closingPrices[closingPrices.length - 1]; 
+
+            if (validBbUpper.length > 0 && validBbLower.length > 0 && lastPrice !== undefined) {
+                const lastBbUpper = validBbUpper[validBbUpper.length - 1].y;
+                const lastBbLower = validBbLower[validBbLower.length - 1].y;
+                if (lastPrice > lastBbUpper) bbRec = 'sell';
+                else if (lastPrice < lastBbLower) bbRec = 'buy';
+            }
+
+            let buyCount = 0;
+            let sellCount = 0;
+
+            if (smaRec === 'buy') buyCount++;
+            if (rsiRec === 'buy') buyCount++;
+            if (bbRec === 'buy') buyCount++;
+
+            if (smaRec === 'sell') sellCount++;
+            if (rsiRec === 'sell') sellCount++;
+            if (bbRec === 'sell') sellCount++;
+
+            let overallRecommendation = 'hold';
+            if (buyCount > sellCount) overallRecommendation = 'buy';
+            else if (sellCount > buyCount) overallRecommendation = 'sell';
+            
+            return { sma: smaRec, rsi: rsiRec, bb: bbRec, overall: overallRecommendation };
+        }
+
+        // ===================================================================================
+        // --- CÓDIGO DE INICIO Y EVENT LISTENERS ---
+        // Este bloque DEBE estar al final del script para asegurar que todas las funciones
+        // llamadas (`initStaticCryptoList`, `runSelectedCryptoAnalysis`, etc.) estén ya definidas.
+        // ===================================================================================
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            console.log("DOM Cargado. Iniciando aplicación.");
+            initStaticCryptoList(); 
+
+            if (allCryptos.length > 0) {
+                runSelectedCryptoAnalysis(); // Inicia el análisis para la crypto seleccionada
+                updateAllCryptosOpportunities(); // Inicia la actualización de todas las oportunidades
+                loadHistoricalRecommendationsFromBackend(); // Carga el historial al inicio
+
+                setInterval(runSelectedCryptoAnalysis, UPDATE_INTERVAL_SELECTED_CRYPTO);
+                setInterval(updateAllCryptosOpportunities, UPDATE_INTERVAL_ALL_CRYPTOS); 
+                setInterval(loadHistoricalRecommendationsFromBackend, HISTORY_UPDATE_INTERVAL); 
+            } else {
+                console.error("No se encontraron criptomonedas en la lista estática. La aplicación no puede iniciar correctamente.");
+                priceNoDataMessage.textContent = "Error: No se encontraron criptomonedas en la lista.";
+                priceNoDataMessage.style.display = 'flex';
+                renderOpportunityColumns({ buy: [], sell: [], hold: [], error: ['No hay criptos en la lista.'] });
+            }
+        });
+
+        coinSelect.addEventListener('change', runSelectedCryptoAnalysis);
+
+        const indicatorCheckboxes = document.querySelectorAll('#indicator-selection-panel input[type="checkbox"]');
+        indicatorCheckboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', () => {
+                if (currentPriceDataCache) { 
+                    renderPriceChart(currentPriceDataCache, currentSmaShortCache, currentSmaLongCache, currentBollingerBandsCache, currentRsiCache);
+                } else {
+                    console.warn("No hay datos en caché para redibujar el gráfico con los indicadores.");
+                }
+            });
+        });
+
     </script>
 </body>
 </html>
