@@ -3,34 +3,33 @@ from flask_cors import CORS
 import csv
 import os
 from datetime import datetime, timedelta, timezone
-from apscheduler.schedulers.background import BackgroundScheduler # Para programar tareas
-import asyncio # Necesario para las funciones asíncronas (get_bybit_klines, scheduled_analysis_job)
+from apscheduler.schedulers.background import BackgroundScheduler 
+import asyncio 
+import httpx # Importar httpx aquí ya que se usa en get_bybit_klines
 
 app = Flask(__name__)
-CORS(app) # Habilitar CORS para permitir solicitudes desde el frontend
+CORS(app) 
 
 # --- CONFIGURACIÓN BACKEND ---
 BYBIT_INTERVAL = "60" 
 BYBIT_CATEGORY = "spot"
-BYBIT_LIMIT = 200 # Máximo de klines a obtener de Bybit por petición
+BYBIT_LIMIT = 200 
 
-SAVE_REC_TO_BACKEND_INTERVAL = timedelta(hours=1) # Guardar recomendación si pasó 1 hora
-PRICE_CHANGE_THRESHOLD = 0.03 # 3% de cambio de precio para guardar
+SAVE_REC_TO_BACKEND_INTERVAL = timedelta(hours=1) 
+PRICE_CHANGE_THRESHOLD = 0.03 
 
-CSV_FILE = 'data.csv' # Archivo para el historial de recomendaciones
-LAST_REC_FILE = 'last_recommendations.csv' # Archivo para la última recomendación conocida por símbolo
+CSV_FILE = 'data.csv' 
+LAST_REC_FILE = 'last_recommendations.csv'
 
-# Cache en memoria para las últimas señales calculadas para cada símbolo.
 current_analysis_cache = {} 
 
-# --- Lista de Símbolos a Monitorear (Debe coincidir con tu frontend) ---
 SYMBOLS_TO_MONITOR = [
     "BTCUSDT", "ETHUSDT", "BNBUSDT", "XRPUSDT", "SOLUSDT", "ADAUSDT", 
     "DOGEUSDT", "SHIBUSDT", "DOTUSDT", "LTCUSDT", "LINKUSDT", "MATICUSDT",
     "TRXUSDT", "AVAXUSDT", "UNIUSDT", "FILUSDT", "ICPUSDT", "APTUSDT", 
     "SUIUSDT", "NEARUSDT", "ATOMUSDT", "ARBUSD", "OPUSDT", "IMXUSDT",
     "AAVEUSDT", "ALGOUSDT", "FTMUSDT", "VETUSDT", "CHZUSDT", "GRTUSDT",
-    "AXSUSDT", "EOSUSDT", "SANDUSDT", "MANAUSDT", # Eliminado KLAYUSDT que no era común, para reducir la lista un poco y evitar errores API
+    "AXSUSDT", "EOSUSDT", "SANDUSDT", "MANAUSDT",
 ]
 
 
@@ -102,7 +101,6 @@ def update_last_recommendation_file(symbol, timestamp_iso, recommendation, sma_r
 
 # --- FUNCIONES DE OBTENCIÓN DE DATOS (Bybit API - Portadas de JS a Python) ---
 async def get_bybit_klines(symbol, interval=BYBIT_INTERVAL, category=BYBIT_CATEGORY, limit=BYBIT_LIMIT):
-    import httpx 
     url = f"https://api.bybit.com/v5/market/kline?category={category}&symbol={symbol}&interval={interval}&limit={limit}"
     
     try:
@@ -516,28 +514,25 @@ scheduler.add_job(
 )
 
 # Esto se ejecuta una vez cuando la aplicación Flask se inicia
-@app.before_first_request
-def initialize_app():
-    # Asegurarse de que el scheduler ya esté iniciado
-    if not scheduler.running:
-        scheduler.start()
-        print("Scheduler started from @app.before_first_request.")
+# Es crucial que se inicie el scheduler aquí para que las tareas en segundo plano empiecen.
+# Asegurarse de que el loop de asyncio esté corriendo para las tareas asíncronas.
+if not scheduler.running:
+    scheduler.start()
+    print("Scheduler started upon module load.")
     # Ejecutar la tarea programada al inicio para poblar la cache lo antes posible
     print("Running initial scheduled job to populate cache.")
-    asyncio.run(scheduled_analysis_job(SYMBOLS_TO_MONITOR))
+    # Intentar ejecutar la tarea inicial en un bucle de eventos existente o crear uno
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError: # RuntimeError means no running loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
+    # Run the task in the event loop
+    loop.run_until_complete(scheduled_analysis_job(SYMBOLS_TO_MONITOR))
 
 
 if __name__ == '__main__':
     print("Running Flask app in __main__ block (for local development).")
-    
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-    
-    if not scheduler.running:
-        scheduler.start()
-        print("Scheduler started locally.")
-        
-    app.run(debug=True, host='0.0.0.0', port=5000, use_reloader=False) # use_reloader=False para no doble-iniciar scheduler
+    # Para ejecución local con 'python app.py', usar reloader=False para evitar doble ejecución del scheduler
+    app.run(debug=True, host='0.0.0.0', port=5000, use_reloader=False)
