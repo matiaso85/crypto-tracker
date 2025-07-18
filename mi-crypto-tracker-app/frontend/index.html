@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Crypto Tracker Online</title>
+    <title>Crypto Tracker Online (Bybit - Indicadores Flexibles)</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -251,7 +251,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@1.0.2"></script>
 </head>
 <body>
-    <h1>Crypto Tracker Online (Bybit)</h1>
+    <h1>Crypto Tracker Online (Bybit + Backend)</h1>
 
     <div class="top-section-container">
         <div id="controls">
@@ -384,16 +384,16 @@
         // URL BASE DE TU BACKEND (¡IMPORTANTE: Cambiar esto cuando lo publiques!)
         // Durante el desarrollo local, usa 'http://127.0.0.1:5000'
         // Después de publicar en Render, usa la URL que Render te dé (ej. 'https://tu-backend-nombre.onrender.com')
-        const BACKEND_URL = 'https://crypto-tracker-ukyl.onrender.com'; 
+        const BACKEND_URL = 'https://crypto-tracker-ukyl.onrender.com'; // ¡ACTUALIZADO CON TU URL DE RENDER!
 
         const BYBIT_INTERVAL = "60"; 
         const BYBIT_CATEGORY = "spot";
-        const BYBIT_LIMIT = 200;
+        const BYBIT_LIMIT = 200; 
 
-        const UPDATE_INTERVAL_SELECTED_CRYPTO = 120000; // 2 minutos
-        const UPDATE_INTERVAL_ALL_CRYPTOS = 5 * 60 * 1000; // 5 minutos
-        const ALL_CRYPTOS_API_DELAY = 1500; // 1.5 segundos
-        const HISTORY_UPDATE_INTERVAL = 60000; // 1 minuto para actualizar el historial desde el backend
+        const UPDATE_INTERVAL_SELECTED_CRYPTO = 120000; // 2 minutos para actualizar la crypto seleccionada
+        const UPDATE_INTERVAL_ALL_CRYPTOS = 5 * 60 * 1000; // 5 minutos para actualizar TODAS las oportunidades
+        const ALL_CRYPTOS_API_DELAY = 1500; // 1.5 segundos de retraso entre cada crypto para la API
+        const HISTORY_UPDATE_INTERVAL = 60000; // 1 minuto para actualizar el historial
 
         const SMA_SHORT_PERIOD = 20;
         const SMA_LONG_PERIOD = 50;
@@ -423,7 +423,7 @@
         const toggleBbLower = document.getElementById('toggle-bb-lower');
         const toggleRsi = document.getElementById('toggle-rsi');
 
-        const backendHistoricalList = document.getElementById('backend-historical-list'); // Nuevo elemento
+        const backendHistoricalList = document.getElementById('backend-historical-list');
 
         let priceChartInstance, countdownInterval;
         let isProcessingAllCryptos = false;
@@ -440,7 +440,6 @@
         // --- INICIALIZACIÓN DE LA APLICACIÓN ---
         // ===================================================================================
 
-        // En la versión estática, la lista de criptos se extrae directamente del HTML.
         function initStaticCryptoList() {
             allCryptos = [];
             const options = coinSelect.options;
@@ -458,10 +457,6 @@
         // --- LÓGICA PRINCIPAL DE ANÁLISIS ---
         // ===================================================================================
 
-        /**
-         * Función que se ejecuta al cargar la página o al cambiar la crypto seleccionada.
-         * Se enfoca en actualizar los gráficos y señales individuales de la crypto seleccionada.
-         */
         async function runSelectedCryptoAnalysis() {
             console.log("Iniciando análisis para la criptomoneda seleccionada...");
             if (countdownInterval) clearInterval(countdownInterval);
@@ -529,10 +524,6 @@
             console.log("Análisis de criptomoneda seleccionada completado.");
         }
 
-        /**
-         * Función para actualizar el tablero de oportunidades con TODAS las criptomonedas.
-         * Realiza una carga progresiva y actualiza el DOM después de cada crypto.
-         */
         async function updateAllCryptosOpportunities() {
             if (isProcessingAllCryptos) {
                 console.log("Ya se está procesando el análisis de todas las criptos. Saltando esta ejecución.");
@@ -548,7 +539,7 @@
             console.log("Iniciando análisis para TODAS las criptomonedas (carga progresiva)...");
 
             const tempRecommendations = { buy: [], sell: [], hold: [], error: [] }; 
-            renderOpportunityColumns(tempRecommendations); // Renderiza los mensajes iniciales (vacíos o cargando)
+            renderOpportunityColumns(tempRecommendations);
 
             for (let i = 0; i < allCryptos.length; i++) {
                 const symbol = allCryptos[i];
@@ -592,7 +583,6 @@
             isProcessingAllCryptos = false;
             console.log("Análisis de TODAS las criptomonedas completado.");
         }
-
 
         // Función auxiliar para obtener la recomendación combinada
         function getCombinedSignals(smaShort, smaLong, rsi, bollingerBands, closingPrices) {
@@ -805,44 +795,42 @@
         // --- FUNCIONES DE PERSISTENCIA (INTERACCIÓN CON BACKEND) ---
         // ===================================================================================
 
-        /**
-         * Guarda una recomendación en el backend.
-         * @param {string} symbol - El símbolo de la criptomoneda.
-         * @param {string} recommendation - La recomendación ('buy', 'sell', 'hold').
-         */
         async function saveRecommendationToBackend(symbol, recommendation) {
+            const payload = {
+                symbol: symbol,
+                recommendation: recommendation,
+                timestamp: new Date().toISOString()
+            };
+            console.log("Enviando a backend para guardar:", `${BACKEND_URL}/save_recommendation`, payload);
             try {
                 const response = await fetch(`${BACKEND_URL}/save_recommendation`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({
-                        symbol: symbol,
-                        recommendation: recommendation,
-                        timestamp: new Date().toISOString()
-                    })
+                    body: JSON.stringify(payload)
                 });
 
                 if (!response.ok) {
-                    throw new Error(`Error al guardar en el backend: ${response.statusText}`);
+                    // Si el servidor responde con un error HTTP (ej. 400, 500)
+                    const errorText = await response.text();
+                    throw new Error(`Error HTTP al guardar en backend: ${response.status} - ${response.statusText}. Detalles: ${errorText}`);
                 }
                 const result = await response.json();
                 console.log('Recomendación guardada en backend:', result.message);
             } catch (error) {
-                console.error('Error al guardar recomendación en backend:', error);
+                console.error('Error al guardar recomendación en backend (catch):', error);
             }
         }
 
-        /**
-         * Carga el historial de recomendaciones desde el backend.
-         */
         async function loadHistoricalRecommendationsFromBackend() {
             backendHistoricalList.innerHTML = '<li>Cargando historial desde el servidor...</li>';
+            console.log("Cargando historial desde backend:", `${BACKEND_URL}/get_recommendations`);
             try {
                 const response = await fetch(`${BACKEND_URL}/get_recommendations`);
                 if (!response.ok) {
-                    throw new Error(`Error al cargar historial desde el backend: ${response.statusText}`);
+                    const errorText = await response.text();
+                    throw new Error(`Error HTTP al cargar historial desde backend: ${response.status} - ${response.statusText}. Detalles: ${errorText}`);
                 }
                 const history = await response.json(); // Se espera un array de objetos
 
@@ -879,7 +867,7 @@
                 });
                 console.log(`Historial cargado desde backend. Total: ${history.length} entradas.`);
             } catch (error) {
-                console.error('Error al cargar historial desde backend:', error);
+                console.error('Error al cargar historial desde backend (catch):', error);
                 backendHistoricalList.innerHTML = `<li>Error al cargar historial: ${error.message}</li>`;
             }
         }
