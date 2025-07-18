@@ -595,7 +595,7 @@
          * @param {Array<object|null>} rsi - Datos del RSI.
          */
         function renderPriceChart(priceData, smaShort, smaLong, bb, rsi) {
-            console.log("renderPriceChart: Iniciando renderizado del gráfico."); // Debugging
+            console.log("renderPriceChart: Iniciando renderizado del gráfico."); 
             if (priceChartInstance) priceChartInstance.destroy();
 
             const ctx = priceChartCanvas.getContext('2d');
@@ -612,9 +612,8 @@
                 }
             ];
 
-            // Condicionales para agregar datasets de indicadores según los checkboxes
             if (toggleSmaShort.checked) {
-                console.log("renderPriceChart: Agregando SMA Corta."); // Debugging
+                console.log("renderPriceChart: Agregando SMA Corta."); 
                 datasets.push({ 
                     label: `SMA ${SMA_SHORT_PERIOD}`, 
                     data: smaShort.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null), 
@@ -626,7 +625,7 @@
                 });
             }
             if (toggleSmaLong.checked) {
-                console.log("renderPriceChart: Agregando SMA Larga."); // Debugging
+                console.log("renderPriceChart: Agregando SMA Larga."); 
                 datasets.push({ 
                     label: `SMA ${SMA_LONG_PERIOD}`, 
                     data: smaLong.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null), 
@@ -639,7 +638,7 @@
             }
             
             if (toggleBbUpper.checked) {
-                console.log("renderPriceChart: Agregando BB Superior."); // Debugging
+                console.log("renderPriceChart: Agregando BB Superior."); 
                 datasets.push({ 
                     label: `BB Superior`, 
                     data: bb.upper.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null), 
@@ -651,7 +650,7 @@
                 });
             }
             if (toggleBbLower.checked) {
-                console.log("renderPriceChart: Agregando BB Inferior."); // Debugging
+                console.log("renderPriceChart: Agregando BB Inferior."); 
                 datasets.push({ 
                     label: `BB Inferior`, 
                     data: bb.lower.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null), 
@@ -665,7 +664,7 @@
                 });
             }
             if (toggleBbMiddle.checked) {
-                console.log("renderPriceChart: Agregando BB Media."); // Debugging
+                console.log("renderPriceChart: Agregando BB Media."); 
                 datasets.push({ 
                     label: `BB Media`, 
                     data: bb.middle.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null), 
@@ -678,9 +677,8 @@
                 });
             }
 
-            // Agregando el RSI si está marcado
             if (toggleRsi.checked) {
-                console.log("renderPriceChart: Agregando RSI."); // Debugging
+                console.log("renderPriceChart: Agregando RSI."); 
                 datasets.push({
                     label: `RSI (${RSI_PERIOD})`,
                     data: rsi.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null),
@@ -704,7 +702,7 @@
                     borderDash: [5, 5], 
                     yAxisID: 'y-rsi', 
                     label: { 
-                        content: 'Sobrecompra', enabled: true, position: 'start', // enabled: true aquí
+                        content: 'Sobrecompra', enabled: true, position: 'start', 
                         color: '#e0e0e0', backgroundColor: 'rgba(255, 0, 0, 0.5)'
                     } 
                 };
@@ -717,7 +715,7 @@
                     borderDash: [5, 5], 
                     yAxisID: 'y-rsi', 
                     label: { 
-                        content: 'Sobreventa', enabled: true, position: 'start', // enabled: true aquí
+                        content: 'Sobreventa', enabled: true, position: 'start', 
                         color: '#e0e0e0', backgroundColor: 'rgba(0, 128, 0, 0.5)'
                     } 
                 };
@@ -761,7 +759,7 @@
                         },
                         'y-rsi': { 
                             type: 'linear',
-                            display: toggleRsi.checked, // Eje RSI solo se muestra si el checkbox está marcado
+                            display: toggleRsi.checked, 
                             position: 'right',
                             min: 0,
                             max: 100,
@@ -774,7 +772,7 @@
                         tooltip: { mode: 'index', intersect: false },
                         legend: { labels: { color: '#e0e0e0' } },
                         annotation: {
-                            annotations: annotations // Pasar el objeto de anotaciones construido condicionalmente
+                            annotations: annotations 
                         }
                     }
                 }
@@ -1015,12 +1013,6 @@
         // ===================================================================================
 
         async function runSelectedCryptoAnalysis() {
-console.log("DEBUG: Datos para renderizado de gráfico:");
-console.log("DEBUG: currentPriceDataCache (primeros 5):", currentPriceDataCache ? currentPriceDataCache.slice(0, 5) : null, "Length:", currentPriceDataCache ? currentPriceDataCache.length : 0);
-console.log("DEBUG: currentSmaShortCache (primeros 5):", currentSmaShortCache ? currentSmaShortCache.slice(0, 5) : null, "Length:", currentSmaShortCache ? currentSmaShortCache.length : 0);
-console.log("DEBUG: currentSmaLongCache (primeros 5):", currentSmaLongCache ? currentSmaLongCache.slice(0, 5) : null, "Length:", currentSmaLongCache ? currentSmaLongCache.length : 0);
-console.log("DEBUG: currentBollingerBandsCache (middle, primeros 5):", currentBollingerBandsCache && currentBollingerBandsCache.middle ? currentBollingerBandsCache.middle.slice(0, 5) : null, "Length:", currentBollingerBandsCache && currentBollingerBandsCache.middle ? currentBollingerBandsCache.middle.length : 0);
-console.log("DEBUG: currentRsiCache (primeros 5):", currentRsiCache ? currentRsiCache.slice(0, 5) : null, "Length:", currentRsiCache ? currentRsiCache.length : 0);
             console.log("Inicio de runSelectedCryptoAnalysis.");
             if (countdownInterval) clearInterval(countdownInterval);
 
@@ -1130,6 +1122,7 @@ console.log("DEBUG: currentRsiCache (primeros 5):", currentRsiCache ? currentRsi
                         tempRecommendations.hold.push(`${symbol} (Datos Insuficientes)`); 
                     } else {
                         const closingPrices = prices.map(p => p.y);
+                        // Asegurar que los resultados de calculateX no sean null antes de pasarlos a getCombinedSignals
                         const smaShort = calculateSMA(closingPrices, SMA_SHORT_PERIOD);
                         const smaLong = calculateSMA(closingPrices, SMA_LONG_PERIOD);
                         const bollingerBands = calculateBollingerBands(closingPrices, BB_PERIOD, BB_STD_DEV);
@@ -1162,7 +1155,7 @@ console.log("DEBUG: currentRsiCache (primeros 5):", currentRsiCache ? currentRsi
         }
 
         // Función auxiliar para obtener la recomendación combinada
-        // Añadida robustez si los inputs de indicadores son null
+        // MEJORA: Lógica de confluencia más estricta
         function getCombinedSignals(smaShort, smaLong, rsi, bollingerBands, closingPrices) {
             let smaRec = 'hold';
             let rsiRec = 'hold';
@@ -1186,7 +1179,6 @@ console.log("DEBUG: currentRsiCache (primeros 5):", currentRsiCache ? currentRsi
                 else if (lastRsi < RSI_OVERSOLD) rsiRec = 'buy';
             }
 
-            // Añadir robustez para bollingerBands si es null
             const validBbUpper = (bollingerBands && bollingerBands.upper) ? bollingerBands.upper.filter(v => v !== null) : [];
             const validBbLower = (bollingerBands && bollingerBands.lower) ? bollingerBands.lower.filter(v => v !== null) : [];
             const lastPrice = closingPrices ? closingPrices[closingPrices.length - 1] : undefined; 
@@ -1210,9 +1202,18 @@ console.log("DEBUG: currentRsiCache (primeros 5):", currentRsiCache ? currentRsi
             if (bbRec === 'sell') sellCount++;
 
             let overallRecommendation = 'hold';
-            if (buyCount > sellCount) overallRecommendation = 'buy';
-            else if (sellCount > buyCount) overallRecommendation = 'sell';
+
+            // Lógica de Confluencia MEJORADA
+            console.log(`getCombinedSignals: Recs individuales: SMA=${smaRec}, RSI=${rsiRec}, BB=${bbRec}`); // Depuración
+            if (buyCount >= 2 && sellCount === 0) { // Al menos 2 compras y ninguna venta
+                overallRecommendation = 'buy';
+            } else if (sellCount >= 2 && buyCount === 0) { // Al menos 2 ventas y ninguna compra
+                overallRecommendation = 'sell';
+            } else { // Cualquier otro caso (empate, contradicción, o solo 1 señal fuerte)
+                overallRecommendation = 'hold';
+            }
             
+            console.log(`getCombinedSignals: Recomendación Combinada: ${overallRecommendation}`); // Depuración
             return { sma: smaRec, rsi: rsiRec, bb: bbRec, overall: overallRecommendation };
         }
 
@@ -1247,7 +1248,6 @@ console.log("DEBUG: currentRsiCache (primeros 5):", currentRsiCache ? currentRsi
         const indicatorCheckboxes = document.querySelectorAll('#indicator-selection-panel input[type="checkbox"]');
         indicatorCheckboxes.forEach(checkbox => {
             checkbox.addEventListener('change', () => {
-                // Volver a renderizar el gráfico con los datos en caché
                 if (currentPriceDataCache) { 
                     renderPriceChart(currentPriceDataCache, currentSmaShortCache, currentSmaLongCache, currentBollingerBandsCache, currentRsiCache);
                 } else {
