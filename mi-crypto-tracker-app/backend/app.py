@@ -2,35 +2,32 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import csv
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone 
 
 app = Flask(__name__)
 CORS(app)
 
-CSV_FILE = 'data.csv'
-# La duración del historial ahora también se aplica al historial para el cálculo de acierto.
+CSV_FILE = 'data.csv' 
 HISTORY_DURATION_HOURS = 24 
 
 # Archivo adicional para guardar la ÚLTIMA recomendación por símbolo
-# Esto es crucial para comparar la recomendación actual con la previa.
+# AÑADIDO 'last_price' para el seguimiento del porcentaje de cambio.
 LAST_REC_FILE = 'last_recommendations.csv'
 
 def ensure_csv_exists():
     if not os.path.exists(CSV_FILE):
         with open(CSV_FILE, mode='w', newline='', encoding='utf-8') as file:
             writer = csv.writer(file)
-            # NUEVOS ENCABEZADOS para el historial: incluir tipo de entrada y detalles
             writer.writerow(['timestamp', 'symbol', 'recommendation', 'prev_recommendation', 'metric_type', 'metric_value', 'details'])
     
+    # AÑADIDO 'last_price' al encabezado de last_recommendations.csv
     if not os.path.exists(LAST_REC_FILE):
         with open(LAST_REC_FILE, mode='w', newline='', encoding='utf-8') as file:
             writer = csv.writer(file)
-            writer.writerow(['symbol', 'timestamp', 'recommendation', 'sma_rec', 'rsi_rec', 'bb_rec'])
+            writer.writerow(['symbol', 'timestamp', 'recommendation', 'sma_rec', 'rsi_rec', 'bb_rec', 'last_price'])
 
-# Asegurar que ambos CSV existan al inicio de la aplicación
 ensure_csv_exists()
 
-# Endpoint para guardar una recomendación
 @app.route('/save_recommendation', methods=['POST'])
 def save_recommendation():
     try:
@@ -42,53 +39,59 @@ def save_recommendation():
         recommendation = data.get('recommendation')
         timestamp_iso = data.get('timestamp')
         
-        # NUEVOS DATOS: Recs individuales y detalles para cálculo de métricas
-        sma_rec = data.get('sma_rec')
-        rsi_rec = data.get('rsi_rec')
-        bb_rec = data.get('bb_rec')
-        
-        # Convierte el timestamp a un objeto datetime UTC
+        sma_rec = data.get('sma_rec', 'N/A') 
+        rsi_rec = data.get('rsi_rec', 'N/A')
+        bb_rec = data.get('bb_rec', 'N/A')
+        current_price = data.get('current_price') # NUEVO: Recibe el precio actual del frontend
+
         current_dt = datetime.fromisoformat(timestamp_iso.replace('Z', '+00:00')).replace(tzinfo=timezone.utc)
 
         # 1. Obtener la última recomendación guardada para este símbolo
-        last_rec_data = {}
+        last_rec_data = None
+        current_rows_last_rec = []
         if os.path.exists(LAST_REC_FILE):
             with open(LAST_REC_FILE, mode='r', newline='', encoding='utf-8') as file:
-                reader = csv.DictReader(file) # Usar DictReader para acceder por nombre de columna
-                for row in reader:
-                    if row['symbol'] == symbol:
-                        last_rec_data = row
-                        break # Asume que solo hay una última recomendación por símbolo
+                reader = csv.DictReader(file)
+                current_rows_last_rec = list(reader)
+
+            for row in current_rows_last_rec:
+                if row['symbol'] == symbol:
+                    last_rec_data = row
+                    break
         
-        prev_recommendation = last_rec_data.get('recommendation', 'N/A')
-        prev_sma_rec = last_rec_data.get('sma_rec', 'N/A')
-        prev_rsi_rec = last_rec_data.get('rsi_rec', 'N/A')
-        prev_bb_rec = last_rec_data.get('bb_rec', 'N/A')
+        prev_recommendation = last_rec_data.get('recommendation', 'N/A') if last_rec_data else 'N/A'
+        prev_sma_rec = last_rec_data.get('sma_rec', 'N/A') if last_rec_data else 'N/A'
+        prev_rsi_rec = last_rec_data.get('rsi_rec', 'N/A') if last_rec_data else 'N/A'
+        prev_bb_rec = last_rec_data.get('bb_rec', 'N/A') if last_rec_data else 'N/A'
+        # prev_price = float(last_rec_data.get('last_price', 0.0)) if last_rec_data and last_rec_data.get('last_price') else 0.0 # Aunque no lo usemos aquí, el frontend lo necesitará
+
 
         metric_type = 'N/A'
         metric_value = 0.0
         details = ""
 
-        # Lógica de cálculo de acierto/riesgo
-        if prev_recommendation != 'N/A': # Solo si hay una recomendación previa
+        # Lógica de cálculo de acierto/riesgo (no cambia la lógica, solo el punto de decisión del guardado)
+        if prev_recommendation != 'N/A' and recommendation != 'N/A':
             if recommendation == prev_recommendation:
                 metric_type = 'Acierto'
-                # Calcular porcentaje de acierto basado en cuántos indicadores se mantuvieron
                 match_count = 0
-                if sma_rec == prev_sma_rec: match_count += 1
-                if rsi_rec == prev_rsi_rec: match_count += 1
-                if bb_rec == prev_bb_rec: match_count += 1
+                if sma_rec == prev_sma_rec and sma_rec != 'N/A': match_count += 1
+                if rsi_rec == prev_rsi_rec and rsi_rec != 'N/A': match_count += 1
+                if bb_rec == prev_bb_rec and bb_rec != 'N/A': match_count += 1
+                
                 metric_value = (match_count / 3) * 100 if match_count > 0 else 0
-                details = f"Recomendación mantenida. Indicadores coincidentes: {match_count}/3."
+                details = f"Rec. mantenida. Indicadores coincidentes: {match_count}/3."
             else:
                 metric_type = 'Riesgo'
-                # Calcular porcentaje de riesgo (ej., cuantos indicadores cambiaron su señal)
                 change_count = 0
-                if sma_rec != prev_sma_rec: change_count += 1
-                if rsi_rec != prev_rsi_rec: change_count += 1
-                if bb_rec != prev_bb_rec: change_count += 1
+                if sma_rec != prev_sma_rec and sma_rec != 'N/A': change_count += 1
+                if rsi_rec != prev_rsi_rec and rsi_rec != 'N/A': change_count += 1
+                if bb_rec != prev_bb_rec and bb_rec != 'N/A': change_count += 1
+                
                 metric_value = (change_count / 3) * 100 if change_count > 0 else 0
-                details = f"Recomendación cambió de '{prev_recommendation}' a '{recommendation}'. Indicadores cambiantes: {change_count}/3."
+                details = f"Rec. cambió de '{prev_recommendation}' a '{recommendation}'. Indicadores cambiantes: {change_count}/3."
+        else:
+            details = "Primera recomendación para el símbolo o datos insuficientes para comparar."
 
         # 2. Guardar la entrada en el historial general (data.csv)
         with open(CSV_FILE, mode='a', newline='', encoding='utf-8') as file:
@@ -97,57 +100,57 @@ def save_recommendation():
                 timestamp_iso,
                 symbol,
                 recommendation,
-                prev_recommendation, # La recomendación previa guardada
+                prev_recommendation, 
                 metric_type,
                 round(metric_value, 2), # Redondea el porcentaje
                 details
             ])
         
         # 3. Actualizar la última recomendación conocida para este símbolo (last_recommendations.csv)
-        # Leer todas las líneas, modificar la del símbolo actual, y reescribir.
-        rows = []
         found = False
-        if os.path.exists(LAST_REC_FILE):
-            with open(LAST_REC_FILE, mode='r', newline='', encoding='utf-8') as file:
-                reader = csv.DictReader(file)
-                for row in reader:
-                    if row['symbol'] == symbol:
-                        # Actualiza la fila para el símbolo actual
-                        rows.append({
-                            'symbol': symbol,
-                            'timestamp': timestamp_iso,
-                            'recommendation': recommendation,
-                            'sma_rec': sma_rec,
-                            'rsi_rec': rsi_rec,
-                            'bb_rec': bb_rec
-                        })
-                        found = True
-                    else:
-                        rows.append(row)
+        updated_rows = []
+        
+        if current_rows_last_rec:
+            for row in current_rows_last_rec:
+                if row['symbol'] == symbol:
+                    updated_rows.append({
+                        'symbol': symbol,
+                        'timestamp': timestamp_iso,
+                        'recommendation': recommendation,
+                        'sma_rec': sma_rec,
+                        'rsi_rec': rsi_rec,
+                        'bb_rec': bb_rec,
+                        'last_price': current_price # NUEVO: Guardar el precio actual
+                    })
+                    found = True
+                else:
+                    updated_rows.append(row)
+        
         if not found:
-            # Si el símbolo no existía, añade una nueva fila
-            rows.append({
+            updated_rows.append({
                 'symbol': symbol,
                 'timestamp': timestamp_iso,
                 'recommendation': recommendation,
                 'sma_rec': sma_rec,
                 'rsi_rec': rsi_rec,
-                'bb_rec': bb_rec
+                'bb_rec': bb_rec,
+                'last_price': current_price # NUEVO: Guardar el precio actual
             })
         
         with open(LAST_REC_FILE, mode='w', newline='', encoding='utf-8') as file:
-            writer = csv.DictWriter(file, fieldnames=['symbol', 'timestamp', 'recommendation', 'sma_rec', 'rsi_rec', 'bb_rec'])
-            writer.writeheader() # Escribe los encabezados
-            writer.writerows(rows) # Escribe todas las filas
+            # Asegúrate de que fieldnames incluya 'last_price'
+            writer = csv.DictWriter(file, fieldnames=['symbol', 'timestamp', 'recommendation', 'sma_rec', 'rsi_rec', 'bb_rec', 'last_price'])
+            writer.writeheader() 
+            writer.writerows(updated_rows) 
 
-        print(f"[{datetime.now().isoformat()}] Saved and updated last rec for {symbol}: {recommendation}")
+        print(f"[{datetime.now().isoformat()}] Saved and updated last rec for {symbol}: {recommendation}, Price: {current_price}")
         return jsonify({'message': 'Recommendation saved and updated successfully'}), 200
 
     except Exception as e:
         print(f"Error saving recommendation: {e}")
         return jsonify({'message': f'Internal server error: {str(e)}'}), 500
 
-# Endpoint para obtener las recomendaciones (filtradas por tiempo)
+# Endpoint para obtener las recomendaciones (sin cambios en la lógica de obtención)
 @app.route('/get_recommendations', methods=['GET'])
 def get_recommendations():
     recommendations = []
@@ -158,12 +161,12 @@ def get_recommendations():
     try:
         with open(CSV_FILE, mode='r', encoding='utf-8') as file:
             reader = csv.reader(file)
-            header = next(reader, None) # Saltar el encabezado (timestamp, symbol, recommendation, prev_recommendation, metric_type, metric_value, details)
+            header = next(reader, None) 
 
             for row in reader:
-                if len(row) >= 7: # Ahora esperamos al menos 7 columnas
+                if len(row) >= 7: 
                     try:
-                        timestamp_str, symbol, recommendation, prev_recommendation, metric_type, metric_value, details = row[:7] # Asegurarse de tomar las 7
+                        timestamp_str, symbol, recommendation, prev_recommendation, metric_type, metric_value_str, details = row[:7]
                         entry_timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00')).replace(tzinfo=timezone.utc)
                         
                         if entry_timestamp >= threshold_time_utc:
@@ -173,7 +176,7 @@ def get_recommendations():
                                 'recommendation': recommendation,
                                 'prev_recommendation': prev_recommendation,
                                 'metric_type': metric_type,
-                                'metric_value': float(metric_value), # Convertir a float
+                                'metric_value': float(metric_value_str), 
                                 'details': details
                             })
                     except ValueError as ve:
