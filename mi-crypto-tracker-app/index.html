@@ -203,7 +203,7 @@
             transform: scale(1.2);
             cursor: pointer;
         }
-        /* Nuevo estilo para el historial que ahora viene del backend */
+        /* NUEVOS ESTILOS PARA LAS 3 COLUMNAS DEL HISTORIAL */
         #backend-historical-board {
             background-color: #1e1e1e;
             padding: 15px;
@@ -213,7 +213,7 @@
             width: 95%;
             max-width: 1200px;
             display: flex;
-            flex-direction: column;
+            flex-direction: column; /* Columna para el título, luego las sub-columnas */
             gap: 10px;
         }
         #backend-historical-board h2 {
@@ -222,29 +222,68 @@
             margin-bottom: 5px;
             text-align: center;
         }
-        #backend-historical-board ul {
+        .history-columns-container { /* Nuevo contenedor para las sub-columnas */
+            display: flex;
+            gap: 10px;
+            flex-grow: 1;
+            min-height: 250px; /* Altura mínima para que sean visibles */
+        }
+        .history-column {
+            background-color: #2a2a2a;
+            padding: 10px;
+            border-radius: 6px;
+            flex: 1; /* Hace que cada columna ocupe el mismo espacio */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow: hidden; /* Oculta contenido que se desborda para el scrollbar */
+        }
+        .history-column h3 {
+            color: #e0e0e0;
+            margin-top: 0;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+            text-align: center;
+        }
+        .history-column ul {
             list-style: none;
             padding: 0;
             margin: 0;
-            overflow-y: auto;
-            max-height: 250px; /* Altura máxima para la lista histórica */
+            width: 100%;
+            overflow-y: auto; /* Permite scroll individual en cada columna */
+            flex-grow: 1;
         }
-        #backend-historical-board li {
-            padding: 8px 0;
-            border-bottom: 1px solid #333;
+        .history-column li {
+            background-color: #333;
+            padding: 8px;
+            margin-bottom: 5px;
+            border-radius: 4px;
+            font-size: 0.9em; /* Fuente un poco más pequeña para más entradas */
+            display: flex;
+            flex-direction: column; /* Apila symbol y timestamp */
+            align-items: flex-start; /* Alinea texto a la izquierda en la lista */
+            font-weight: bold;
+            word-wrap: break-word; /* Para asegurar que el texto largo se ajuste */
+        }
+        .history-column li:last-child {
+            margin-bottom: 0;
+        }
+        .historical-timestamp {
+            font-size: 0.7em; /* Fuente más pequeña para el timestamp */
+            color: #aaa;
+            font-weight: normal;
+        }
+        .metric-info { /* Contenedor para acierto/riesgo y valor */
             display: flex;
             justify-content: space-between;
-            align-items: center;
-            font-size: 0.95em;
-        }
-        #backend-historical-board li:last-child {
-            border-bottom: none;
+            width: 100%;
+            font-weight: normal; /* Para que el texto sea normal por defecto */
         }
         /* Estilos para las métricas de acierto/riesgo en el historial */
         .metric-acierto { color: #28a745; font-weight: bold; } /* Verde para acierto */
         .metric-riesgo { color: #dc3545; font-weight: bold; } /* Rojo para riesgo */
         .metric-na { color: #6c757d; } /* Gris para N/A */
-        .metric-value { margin-left: 5px; font-size: 0.9em; } /* Porcentaje */
+        .metric-value { margin-left: 5px; font-size: 0.9em; font-weight: bold;} /* Porcentaje */
     </style>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
@@ -368,9 +407,25 @@
     
     <div id="backend-historical-board" class="container">
         <h2>Historial de Recomendaciones (Desde Backend)</h2>
-        <ul id="backend-historical-list">
-            <li>Cargando historial...</li>
-        </ul>
+        <div class="history-columns-container"> <div class="history-column">
+                <h3>Todas las Criptos</h3>
+                <ul id="all-history-list">
+                    <li>Cargando...</li>
+                </ul>
+            </div>
+            <div class="history-column">
+                <h3>Aciertos</h3>
+                <ul id="aciertos-list">
+                    <li>Cargando...</li>
+                </ul>
+            </div>
+            <div class="history-column">
+                <h3>Riesgos</h3>
+                <ul id="riesgos-list">
+                    <li>Cargando...</li>
+                </ul>
+            </div>
+        </div>
         <p style="font-size: 0.8em; color: #888; margin-top: 10px; text-align: center;">
             Este historial se guarda y recupera desde el servidor backend (archivo data.csv).
         </p>
@@ -428,7 +483,10 @@
         const toggleBbLower = document.getElementById('toggle-bb-lower');
         const toggleRsi = document.getElementById('toggle-rsi');
 
-        const backendHistoricalList = document.getElementById('backend-historical-list');
+        // Referencias a las nuevas listas de historial
+        const allHistoryList = document.getElementById('all-history-list');
+        const aciertosList = document.getElementById('aciertos-list');
+        const riesgosList = document.getElementById('riesgos-list');
 
         let priceChartInstance, countdownInterval;
         let isProcessingAllCryptos = false;
@@ -978,7 +1036,11 @@
         }
 
         async function loadHistoricalRecommendationsFromBackend() {
-            backendHistoricalList.innerHTML = '<li>Cargando historial desde el servidor...</li>';
+            // Limpiar todas las listas del historial
+            allHistoryList.innerHTML = '<li>Cargando historial...</li>';
+            aciertosList.innerHTML = '<li>Cargando...</li>';
+            riesgosList.innerHTML = '<li>Cargando...</li>';
+
             console.log("Cargando historial desde backend:", `${BACKEND_URL}/get_recommendations`);
             try {
                 const response = await fetch(`${BACKEND_URL}/get_recommendations`);
@@ -988,11 +1050,22 @@
                 }
                 const history = await response.json();
 
-                backendHistoricalList.innerHTML = '';
+                // Limpiar después de cargar (si hay datos) o mantener el "Cargando..." si falla el fetch.
+                allHistoryList.innerHTML = '';
+                aciertosList.innerHTML = '';
+                riesgosList.innerHTML = '';
+
                 if (history.length === 0) {
-                    backendHistoricalList.innerHTML = `<li>No hay historial de recomendaciones aún.</li>`;
+                    allHistoryList.innerHTML = `<li>No hay historial de recomendaciones aún.</li>`;
+                    aciertosList.innerHTML = `<li>Ninguno.</li>`;
+                    riesgosList.innerHTML = `<li>Ninguno.</li>`;
                     return;
                 }
+
+                // Arrays temporales para construir las listas ordenadas
+                const tempAllHistory = [];
+                const tempAciertos = [];
+                const tempRiesgos = [];
 
                 history.forEach(entry => {
                     const date = new Date(entry.timestamp);
@@ -1009,33 +1082,77 @@
                         recText = 'VENTA';
                     }
 
-                    // NUEVO: Mostrar métricas de acierto/riesgo
                     let metricHtml = '';
                     if (entry.metric_type && entry.metric_type !== 'N/A') {
                         const metricClass = entry.metric_type === 'Acierto' ? 'metric-acierto' : 'metric-riesgo';
                         metricHtml = `<span class="${metricClass}">${entry.metric_type}: <span class="metric-value">${entry.metric_value}%</span></span>`;
                     } else {
-                        metricHtml = `<span class="metric-na">N/A</span>`; // Si no hay métrica
+                        metricHtml = `<span class="metric-na">N/A</span>`; 
                     }
 
-
-                    const listItem = document.createElement('li');
-                    listItem.innerHTML = `
+                    // --- Para la columna "Todas las Criptos" ---
+                    let allHistoryItemHtml = `
                         <div class="opportunity-item">
                             <span class="opportunity-label">${entry.symbol}</span> 
                             <span class="historical-timestamp">${dateString} ${timeString}</span>
                             <span class="opportunity-action ${recClass}">${recText}</span>
-                            ${metricHtml}
                         </div>
                         <div style="font-size: 0.75em; color: #888; width: 100%; text-align: right;">
-                            ${entry.details || ''} </div>
+                            ${entry.details || ''}
+                        </div>
                     `;
-                    backendHistoricalList.appendChild(listItem);
+                    tempAllHistory.push({html: allHistoryItemHtml, timestamp: entry.timestamp}); // Guardar con timestamp para ordenar
+
+                    // --- Para las columnas "Aciertos" y "Riesgos" (solo si aplica) ---
+                    if (entry.metric_type === 'Acierto') {
+                        let aciertoItemHtml = `
+                            <div class="opportunity-item">
+                                <span class="opportunity-label">${entry.symbol}</span> 
+                                <span class="historical-timestamp">${dateString} ${timeString}</span>
+                                ${metricHtml}
+                            </div>
+                        `;
+                        tempAciertos.push({html: aciertoItemHtml, timestamp: entry.timestamp});
+                    } else if (entry.metric_type === 'Riesgo') {
+                        let riesgoItemHtml = `
+                            <div class="opportunity-item">
+                                <span class="opportunity-label">${entry.symbol}</span> 
+                                <span class="historical-timestamp">${dateString} ${timeString}</span>
+                                ${metricHtml}
+                            </div>
+                        `;
+                        tempRiesgos.push({html: riesgoItemHtml, timestamp: entry.timestamp});
+                    }
                 });
+
+                // Ordenar las listas por timestamp (más recientes primero) antes de agregarlas al DOM
+                tempAllHistory.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).forEach(item => {
+                    const li = document.createElement('li');
+                    li.innerHTML = item.html;
+                    allHistoryList.appendChild(li);
+                });
+                tempAciertos.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).forEach(item => {
+                    const li = document.createElement('li');
+                    li.innerHTML = item.html;
+                    aciertosList.appendChild(li);
+                });
+                tempRiesgos.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).forEach(item => {
+                    const li = document.createElement('li');
+                    li.innerHTML = item.html;
+                    riesgosList.appendChild(li);
+                });
+
+                // Si una columna queda vacía, mostrar "Ninguno"
+                if (tempAllHistory.length === 0) allHistoryList.innerHTML = `<li>No hay historial.</li>`;
+                if (tempAciertos.length === 0) aciertosList.innerHTML = `<li>Ninguno.</li>`;
+                if (tempRiesgos.length === 0) riesgosList.innerHTML = `<li>Ninguno.</li>`;
+
                 console.log(`Historial cargado desde backend. Total: ${history.length} entradas.`);
             } catch (error) {
                 console.error('Error al cargar historial desde backend (catch):', error);
-                backendHistoricalList.innerHTML = `<li>Error al cargar historial: ${error.message}</li>`;
+                allHistoryList.innerHTML = `<li>Error al cargar: ${error.message}</li>`;
+                aciertosList.innerHTML = `<li>Error al cargar.</li>`;
+                riesgosList.innerHTML = `<li>Error al cargar.</li>`;
             }
         }
 
@@ -1254,7 +1371,7 @@
                     overallRecommendation = 'buy';
                 } else if (sellCount >= 2 && buyCount === 0) { // Al menos 2 ventas y ninguna compra
                     overallRecommendation = 'sell';
-                } else { // Cualquier otro caso (empate, contradicciones, o solo 1 señal fuerte)
+                } else { // Cualquier otro caso (empate, contradicción, o solo 1 señal fuerte)
                     overallRecommendation = 'hold';
                 }
             } else { // Si no hay suficientes indicadores disponibles (por ejemplo, todos son N/A o solo 1 es válido)
