@@ -451,8 +451,12 @@
         const HISTORY_UPDATE_INTERVAL = 60000; // 1 minuto para actualizar el historial
         // NUEVO: Intervalo para guardar la recomendación en el backend (1 hora = 3600000 ms)
         const SAVE_REC_TO_BACKEND_INTERVAL = 3600000; // 1 hora
-        // Map para guardar la última vez que se guardó una recomendación por símbolo
-        const lastSavedTime = new Map();
+        // NUEVO: Umbral de cambio de precio para guardar una recomendación (3%)
+        const PRICE_CHANGE_THRESHOLD = 0.03; // 3%
+
+        // Map para guardar la última vez que se guardó una recomendación y su precio asociado por símbolo
+        // Estructura: Map<symbol, {timestamp: number, price: number}>
+        const lastSavedData = new Map();
 
 
         const SMA_SHORT_PERIOD = 20;
@@ -988,31 +992,50 @@
         // DEBEN estar definidas antes de las funciones de análisis principal.
         // ===================================================================================
 
-        async function saveRecommendationToBackend(symbol, recommendation, individualSignals) { // Nuevo parámetro
+        async function saveRecommendationToBackend(symbol, recommendation, individualSignals, currentPrice) { // Nuevo parámetro currentPrice
             // Aseguramos que la recomendación no sea undefined o null antes de enviar
             if (recommendation === undefined || recommendation === null) {
                 console.warn(`saveRecommendationToBackend: No se pudo guardar la recomendación para ${symbol} porque es undefined/null.`);
                 return; 
             }
 
-            // NUEVO: No guardar si no ha pasado suficiente tiempo desde la última recomendación guardada.
+            // NUEVO: Lógica condicional para guardar basada en tiempo O cambio de precio
             const now = Date.now();
-            const lastSaved = lastSavedTime.get(symbol) || 0;
-            if (now - lastSaved < SAVE_REC_TO_BACKEND_INTERVAL) {
-                console.log(`saveRecommendationToBackend: Saltando guardado para ${symbol}. Menos de 1 hora desde la última entrada.`);
+            const savedDataForSymbol = lastSavedData.get(symbol); 
+            const lastSavedTimestamp = savedDataForSymbol ? savedDataForSymbol.timestamp : 0;
+            const lastSavedPrice = savedDataForSymbol ? savedDataForSymbol.price : null;
+
+            const hasTimePassed = (now - lastSavedTimestamp) >= SAVE_REC_TO_BACKEND_INTERVAL;
+            
+            let hasSignificantPriceChange = false;
+            if (lastSavedPrice !== null && currentPrice !== undefined && currentPrice !== null && currentPrice !== 0) {
+                const percentageChange = Math.abs(currentPrice - lastSavedPrice) / lastSavedPrice;
+                hasSignificantPriceChange = percentageChange >= PRICE_CHANGE_THRESHOLD;
+            } else if (lastSavedPrice === null && currentPrice !== undefined && currentPrice !== null) {
+                // Si es la primera vez que guardamos un precio, consideramos que hay un "cambio" si ya hay un precio actual.
+                // Esto es para que la primera entrada siempre se guarde (si no ha pasado suficiente tiempo).
+                hasSignificantPriceChange = true; 
+            }
+
+
+            // Condición para SALTAR el guardado
+            if (!hasTimePassed && !hasSignificantPriceChange) {
+                console.log(`saveRecommendationToBackend: Saltando guardado para ${symbol}. No ha pasado 1 hora Y no hubo cambio de precio del ${PRICE_CHANGE_THRESHOLD * 100}%.`);
                 return;
             }
-            lastSavedTime.set(symbol, now); // Actualizar el tiempo del último guardado
+
+            // Si llegamos aquí, es porque se debe guardar. Actualizar lastSavedData.
+            lastSavedData.set(symbol, { timestamp: now, price: currentPrice });
 
 
             const payload = {
                 symbol: symbol,
                 recommendation: recommendation,
                 timestamp: new Date().toISOString(),
-                // NUEVO: Añadir las recomendaciones individuales al payload
                 sma_rec: individualSignals.sma,
                 rsi_rec: individualSignals.rsi,
-                bb_rec: individualSignals.bb
+                bb_rec: individualSignals.bb,
+                current_price: currentPrice // NUEVO: Enviar el precio actual al backend
             };
             console.log("Enviando a backend para guardar:", `${BACKEND_URL}/save_recommendation`, payload);
             try {
@@ -1098,10 +1121,10 @@
                             <span class="opportunity-action ${recClass}">${recText}</span>
                         </div>
                         <div style="font-size: 0.75em; color: #888; width: 100%; text-align: right;">
-                            ${entry.details || ''}
+                            ${entry.details || ''} 
                         </div>
                     `;
-                    tempAllHistory.push({html: allHistoryItemHtml, timestamp: entry.timestamp}); // Guardar con timestamp para ordenar
+                    tempAllHistory.push({html: allHistoryItemHtml, timestamp: entry.timestamp}); 
 
                     // --- Para las columnas "Aciertos" y "Riesgos" (solo si aplica) ---
                     if (entry.metric_type === 'Acierto') {
@@ -1210,7 +1233,7 @@
                 priceNoDataMessage.style.display = 'flex';
                 // Si no hay datos suficientes, se guarda una recomendación 'hold' para registrar el evento
                 console.log("runSelectedCryptoAnalysis: Guardando 'HOLD' por datos insuficientes.");
-                await saveRecommendationToBackend(selectedSymbol, 'hold', {sma: 'N/A', rsi: 'N/A', bb: 'N/A'}); 
+                await saveRecommendationToBackend(selectedSymbol, 'hold', {sma: 'N/A', rsi: 'N/A', bb: 'N/A'}, prices && prices.length > 0 ? prices[prices.length -1].y : null); // Se pasa null si no hay precio
                 return;
             }
 
@@ -1218,6 +1241,7 @@
 
             currentPriceDataCache = prices; 
             const closingPrices = prices.map(p => p.y);
+            const currentPrice = closingPrices[closingPrices.length - 1]; // Obtener el último precio de cierre
 
             console.log("runSelectedCryptoAnalysis: Calculando indicadores para la cripto seleccionada...");
             currentSmaShortCache = calculateSMA(closingPrices, SMA_SHORT_PERIOD);
@@ -1233,7 +1257,8 @@
             updateSignals(currentSmaShortCache, currentSmaLongCache, currentRsiCache, currentBollingerBandsCache, closingPrices); // Actualiza los paneles individuales
 
             console.log("runSelectedCryptoAnalysis: Intentando guardar recomendación en backend...");
-            await saveRecommendationToBackend(selectedSymbol, signals.overall, signals); 
+            // Pasamos currentPrice como el último parámetro
+            await saveRecommendationToBackend(selectedSymbol, signals.overall, signals, currentPrice); 
             console.log("runSelectedCryptoAnalysis: Recomendación enviada a backend.");
 
             startUpdateTimer(UPDATE_INTERVAL_SELECTED_CRYPTO / 1000);
