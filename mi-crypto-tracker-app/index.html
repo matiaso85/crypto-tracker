@@ -240,11 +240,11 @@
         #backend-historical-board li:last-child {
             border-bottom: none;
         }
-        .historical-timestamp {
-            font-size: 0.8em;
-            color: #aaa;
-            margin-left: 10px;
-        }
+        /* Estilos para las métricas de acierto/riesgo en el historial */
+        .metric-acierto { color: #28a745; font-weight: bold; } /* Verde para acierto */
+        .metric-riesgo { color: #dc3545; font-weight: bold; } /* Rojo para riesgo */
+        .metric-na { color: #6c757d; } /* Gris para N/A */
+        .metric-value { margin-left: 5px; font-size: 0.9em; } /* Porcentaje */
     </style>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
@@ -394,6 +394,11 @@
         const UPDATE_INTERVAL_ALL_CRYPTOS = 5 * 60 * 1000; // 5 minutos para actualizar TODAS las oportunidades
         const ALL_CRYPTOS_API_DELAY = 1500; // 1.5 segundos de retraso entre cada crypto para la API
         const HISTORY_UPDATE_INTERVAL = 60000; // 1 minuto para actualizar el historial
+        // NUEVO: Intervalo para guardar la recomendación en el backend (1 hora = 3600000 ms)
+        const SAVE_REC_TO_BACKEND_INTERVAL = 3600000; // 1 hora
+        // Map para guardar la última vez que se guardó una recomendación por símbolo
+        const lastSavedTime = new Map();
+
 
         const SMA_SHORT_PERIOD = 20;
         const SMA_LONG_PERIOD = 50;
@@ -925,17 +930,31 @@
         // DEBEN estar definidas antes de las funciones de análisis principal.
         // ===================================================================================
 
-        async function saveRecommendationToBackend(symbol, recommendation) {
+        async function saveRecommendationToBackend(symbol, recommendation, individualSignals) { // Nuevo parámetro
             // Aseguramos que la recomendación no sea undefined o null antes de enviar
             if (recommendation === undefined || recommendation === null) {
                 console.warn(`saveRecommendationToBackend: No se pudo guardar la recomendación para ${symbol} porque es undefined/null.`);
                 return; 
             }
 
+            // NUEVO: No guardar si no ha pasado suficiente tiempo desde la última recomendación guardada.
+            const now = Date.now();
+            const lastSaved = lastSavedTime.get(symbol) || 0;
+            if (now - lastSaved < SAVE_REC_TO_BACKEND_INTERVAL) {
+                console.log(`saveRecommendationToBackend: Saltando guardado para ${symbol}. Menos de 1 hora desde la última entrada.`);
+                return;
+            }
+            lastSavedTime.set(symbol, now); // Actualizar el tiempo del último guardado
+
+
             const payload = {
                 symbol: symbol,
                 recommendation: recommendation,
-                timestamp: new Date().toISOString()
+                timestamp: new Date().toISOString(),
+                // NUEVO: Añadir las recomendaciones individuales al payload
+                sma_rec: individualSignals.sma,
+                rsi_rec: individualSignals.rsi,
+                bb_rec: individualSignals.bb
             };
             console.log("Enviando a backend para guardar:", `${BACKEND_URL}/save_recommendation`, payload);
             try {
@@ -990,13 +1009,26 @@
                         recText = 'VENTA';
                     }
 
+                    // NUEVO: Mostrar métricas de acierto/riesgo
+                    let metricHtml = '';
+                    if (entry.metric_type && entry.metric_type !== 'N/A') {
+                        const metricClass = entry.metric_type === 'Acierto' ? 'metric-acierto' : 'metric-riesgo';
+                        metricHtml = `<span class="${metricClass}">${entry.metric_type}: <span class="metric-value">${entry.metric_value}%</span></span>`;
+                    } else {
+                        metricHtml = `<span class="metric-na">N/A</span>`; // Si no hay métrica
+                    }
+
+
                     const listItem = document.createElement('li');
                     listItem.innerHTML = `
                         <div class="opportunity-item">
                             <span class="opportunity-label">${entry.symbol}</span> 
                             <span class="historical-timestamp">${dateString} ${timeString}</span>
                             <span class="opportunity-action ${recClass}">${recText}</span>
+                            ${metricHtml}
                         </div>
+                        <div style="font-size: 0.75em; color: #888; width: 100%; text-align: right;">
+                            ${entry.details || ''} </div>
                     `;
                     backendHistoricalList.appendChild(listItem);
                 });
@@ -1061,7 +1093,8 @@
                 priceNoDataMessage.style.display = 'flex';
                 // Si no hay datos suficientes, se guarda una recomendación 'hold' para registrar el evento
                 console.log("runSelectedCryptoAnalysis: Guardando 'HOLD' por datos insuficientes.");
-                await saveRecommendationToBackend(selectedSymbol, 'hold'); 
+                // Aunque no haya señales individuales, se envía "N/A" para evitar errores en el backend
+                await saveRecommendationToBackend(selectedSymbol, 'hold', {sma: 'N/A', rsi: 'N/A', bb: 'N/A'}); 
                 return;
             }
 
@@ -1084,7 +1117,8 @@
             updateSignals(currentSmaShortCache, currentSmaLongCache, currentRsiCache, currentBollingerBandsCache, closingPrices); // Actualiza los paneles individuales
 
             console.log("runSelectedCryptoAnalysis: Intentando guardar recomendación en backend...");
-            await saveRecommendationToBackend(selectedSymbol, signals.overall); 
+            // Enviamos las señales individuales también para que el backend pueda usarlas en el cálculo de métricas
+            await saveRecommendationToBackend(selectedSymbol, signals.overall, signals); 
             console.log("runSelectedCryptoAnalysis: Recomendación enviada a backend.");
 
             startUpdateTimer(UPDATE_INTERVAL_SELECTED_CRYPTO / 1000);
@@ -1122,7 +1156,6 @@
                         tempRecommendations.hold.push(`${symbol} (Datos Insuficientes)`); 
                     } else {
                         const closingPrices = prices.map(p => p.y);
-                        // Asegurar que los resultados de calculateX no sean null antes de pasarlos a getCombinedSignals
                         const smaShort = calculateSMA(closingPrices, SMA_SHORT_PERIOD);
                         const smaLong = calculateSMA(closingPrices, SMA_LONG_PERIOD);
                         const bollingerBands = calculateBollingerBands(closingPrices, BB_PERIOD, BB_STD_DEV);
@@ -1204,16 +1237,16 @@
             let overallRecommendation = 'hold';
 
             // Lógica de Confluencia MEJORADA
-            console.log(`getCombinedSignals: Recs individuales: SMA=${smaRec}, RSI=${rsiRec}, BB=${bbRec}`); // Depuración
-            if (buyCount >= 2 && sellCount === 0) { // Al menos 2 compras y ninguna venta
+            console.log(`getCombinedSignals: Recs individuales: SMA=${smaRec}, RSI=${rsiRec}, BB=${bbRec}`); 
+            if (buyCount >= 2 && sellCount === 0) { 
                 overallRecommendation = 'buy';
-            } else if (sellCount >= 2 && buyCount === 0) { // Al menos 2 ventas y ninguna compra
+            } else if (sellCount >= 2 && buyCount === 0) { 
                 overallRecommendation = 'sell';
-            } else { // Cualquier otro caso (empate, contradicción, o solo 1 señal fuerte)
+            } else { 
                 overallRecommendation = 'hold';
             }
             
-            console.log(`getCombinedSignals: Recomendación Combinada: ${overallRecommendation}`); // Depuración
+            console.log(`getCombinedSignals: Recomendación Combinada: ${overallRecommendation}`); 
             return { sma: smaRec, rsi: rsiRec, bb: bbRec, overall: overallRecommendation };
         }
 
