@@ -382,7 +382,7 @@
         // ===================================================================================
 
         // URL BASE DE TU BACKEND (¡IMPORTANTE: Cambiar esto cuando lo publiques!)
-        // Durante el desarrollo local, usa 'http://127.0.0.1:5000'
+        // Durante el desarrollo local, usa 'http://172.0.0.1:5000'
         // Después de publicar en Render, usa la URL que Render te dé (ej. 'https://tu-backend-nombre.onrender.com')
         const BACKEND_URL = 'https://crypto-tracker-ukyl.onrender.com'; 
 
@@ -459,6 +459,8 @@
         // ===================================================================================
         function calculateSMA(data, period) {
             let sma = [];
+            if (!data || data.length < period) return Array(data ? data.length : 0).fill(null); // Robustez
+
             for (let i = 0; i < data.length; i++) {
                 if (i < period - 1) {
                     sma.push(null);
@@ -473,6 +475,11 @@
 
         function calculateBollingerBands(data, period, stdDevMultiplier) {
             let middle = [], upper = [], lower = [];
+            if (!data || data.length < period) { // Robustez
+                const nulls = Array(data ? data.length : 0).fill(null);
+                return { middle: nulls, upper: nulls, lower: nulls };
+            }
+
             for (let i = 0; i < data.length; i++) {
                 if (i < period - 1) {
                     middle.push(null);
@@ -494,12 +501,12 @@
         function calculateRSI(data, period) {
             let rsiValues = [];
             
-            for (let i = 0; i < period; i++) {
-                rsiValues.push(null);
+            if (!data || data.length < period + 1) { // Robustez
+                return Array(data ? data.length : 0).fill(null);
             }
 
-            if (data.length < period + 1) {
-                return rsiValues;
+            for (let i = 0; i < period; i++) {
+                rsiValues.push(null);
             }
 
             let avgGain = 0;
@@ -570,7 +577,7 @@
 
             } catch (error) {
                 console.error(`Error al obtener datos de la API de Bybit para ${symbol}:`, error);
-                return null;
+                return null; // Retorna null si hay un error en la API
             }
         }
         
@@ -770,8 +777,8 @@
             let rsiRec = 'hold';
             let bbRec = 'hold';
 
-            const validSmaShort = smaShort.filter(v => v !== null);
-            const validSmaLong = smaLong.filter(v => v !== null);
+            const validSmaShort = smaShort ? smaShort.filter(v => v !== null) : []; // Robustez
+            const validSmaLong = smaLong ? smaLong.filter(v => v !== null) : [];   // Robustez
 
             if (validSmaShort.length >= 2 && validSmaLong.length >= 2) {
                 const lastSmaShort = validSmaShort[validSmaShort.length - 1].y;
@@ -794,7 +801,7 @@
                 smaSignalDiv.className = 'signal hold';
             }
 
-            const validRsi = rsi.filter(v => v !== null);
+            const validRsi = rsi ? rsi.filter(v => v !== null) : []; // Robustez
             if (validRsi.length > 0) {
                 const lastRsi = validRsi[validRsi.length - 1].y;
                 if (lastRsi > RSI_OVERBOUGHT) {
@@ -812,9 +819,9 @@
                 rsiSignalDiv.className = 'signal hold';
             }
 
-            const validBbUpper = bollingerBands.upper.filter(v => v !== null);
-            const validBbLower = bollingerBands.lower.filter(v => v !== null);
-            const lastPrice = closingPrices[closingPrices.length - 1]; 
+            const validBbUpper = bollingerBands.upper ? bollingerBands.upper.filter(v => v !== null) : []; // Robustez
+            const validBbLower = bollingerBands.lower ? bollingerBands.lower.filter(v => v !== null) : []; // Robustez
+            const lastPrice = closingPrices ? closingPrices[closingPrices.length - 1] : undefined; // Robustez
 
             if (validBbUpper.length > 0 && validBbLower.length > 0 && lastPrice !== undefined) {
                 const lastBbUpper = validBbUpper[validBbUpper.length - 1].y;
@@ -907,6 +914,12 @@
         // ===================================================================================
 
         async function saveRecommendationToBackend(symbol, recommendation) {
+            // Aseguramos que la recomendación no sea undefined o null antes de enviar
+            if (recommendation === undefined || recommendation === null) {
+                console.warn(`saveRecommendationToBackend: No se pudo guardar la recomendación para ${symbol} porque es undefined/null.`);
+                return; 
+            }
+
             const payload = {
                 symbol: symbol,
                 recommendation: recommendation,
@@ -1027,10 +1040,9 @@
                 priceChartCanvas.style.display = 'none';
                 priceNoDataMessage.textContent = "Datos insuficientes para gráficos."
                 priceNoDataMessage.style.display = 'flex';
-                // Aunque no haya datos para el gráfico, intentamos guardar una señal de "HOLD"
-                // para que se registre el intento.
-                console.log("runSelectedCryptoAnalysis: Intentando guardar 'HOLD' por datos insuficientes.");
-                await saveRecommendationToBackend(selectedSymbol, 'hold'); // Guardar 'hold' si no hay datos suficientes
+                // Si no hay datos suficientes, se guarda una recomendación 'hold' para registrar el evento
+                console.log("runSelectedCryptoAnalysis: Guardando 'HOLD' por datos insuficientes.");
+                await saveRecommendationToBackend(selectedSymbol, 'hold'); 
                 return;
             }
 
@@ -1049,11 +1061,13 @@
             renderPriceChart(currentPriceDataCache, currentSmaShortCache, currentSmaLongCache, currentBollingerBandsCache, currentRsiCache);
             
             console.log("runSelectedCryptoAnalysis: Actualizando señales individuales...");
+            // Aseguramos que los resultados de getCombinedSignals se pasen
             const signals = getCombinedSignals(currentSmaShortCache, currentSmaLongCache, currentRsiCache, currentBollingerBandsCache, closingPrices);
             updateSignals(currentSmaShortCache, currentSmaLongCache, currentRsiCache, currentBollingerBandsCache, closingPrices); // Actualiza los paneles individuales
 
             console.log("runSelectedCryptoAnalysis: Intentando guardar recomendación en backend...");
-            await saveRecommendationToBackend(selectedSymbol, signals.overall); // Usamos signals.overall directamente
+            // Usamos signals.overall directamente, que ahora debería estar correctamente definido.
+            await saveRecommendationToBackend(selectedSymbol, signals.overall); 
             console.log("runSelectedCryptoAnalysis: Recomendación enviada a backend.");
 
             startUpdateTimer(UPDATE_INTERVAL_SELECTED_CRYPTO / 1000);
@@ -1091,6 +1105,7 @@
                         tempRecommendations.hold.push(`${symbol} (Datos Insuficientes)`); 
                     } else {
                         const closingPrices = prices.map(p => p.y);
+                        // Asegurar que los resultados de calculateX no sean null antes de pasarlos a getCombinedSignals
                         const smaShort = calculateSMA(closingPrices, SMA_SHORT_PERIOD);
                         const smaLong = calculateSMA(closingPrices, SMA_LONG_PERIOD);
                         const bollingerBands = calculateBollingerBands(closingPrices, BB_PERIOD, BB_STD_DEV);
@@ -1123,13 +1138,14 @@
         }
 
         // Función auxiliar para obtener la recomendación combinada
+        // Añadida robustez si los inputs de indicadores son null
         function getCombinedSignals(smaShort, smaLong, rsi, bollingerBands, closingPrices) {
             let smaRec = 'hold';
             let rsiRec = 'hold';
             let bbRec = 'hold';
 
-            const validSmaShort = smaShort.filter(v => v !== null);
-            const validSmaLong = smaLong.filter(v => v !== null);
+            const validSmaShort = smaShort ? smaShort.filter(v => v !== null) : [];
+            const validSmaLong = smaLong ? smaLong.filter(v => v !== null) : [];
             if (validSmaShort.length >= 2 && validSmaLong.length >= 2) {
                 const lastSmaShort = validSmaShort[validSmaShort.length - 1].y;
                 const prevSmaShort = validSmaShort[validSmaShort.length - 2].y;
@@ -1139,16 +1155,17 @@
                 else if (prevSmaShort >= prevSmaLong && lastSmaLong < lastSmaLong) smaRec = 'sell';
             }
 
-            const validRsi = rsi.filter(v => v !== null);
+            const validRsi = rsi ? rsi.filter(v => v !== null) : [];
             if (validRsi.length > 0) {
                 const lastRsi = validRsi[validRsi.length - 1].y;
                 if (lastRsi > RSI_OVERBOUGHT) rsiRec = 'sell';
                 else if (lastRsi < RSI_OVERSOLD) rsiRec = 'buy';
             }
 
-            const validBbUpper = bollingerBands.upper.filter(v => v !== null);
-            const validBbLower = bollingerBands.lower.filter(v => v !== null);
-            const lastPrice = closingPrices[closingPrices.length - 1]; 
+            // Añadir robustez para bollingerBands si es null
+            const validBbUpper = (bollingerBands && bollingerBands.upper) ? bollingerBands.upper.filter(v => v !== null) : [];
+            const validBbLower = (bollingerBands && bollingerBands.lower) ? bollingerBands.lower.filter(v => v !== null) : [];
+            const lastPrice = closingPrices ? closingPrices[closingPrices.length - 1] : undefined; 
 
             if (validBbUpper.length > 0 && validBbLower.length > 0 && lastPrice !== undefined) {
                 const lastBbUpper = validBbUpper[validBbUpper.length - 1].y;
