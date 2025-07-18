@@ -459,7 +459,7 @@
         // ===================================================================================
         function calculateSMA(data, period) {
             let sma = [];
-            if (!data || data.length < period) return Array(data ? data.length : 0).fill(null); // Robustez
+            if (!data || data.length < period) return Array(data ? data.length : 0).fill(null); 
 
             for (let i = 0; i < data.length; i++) {
                 if (i < period - 1) {
@@ -475,7 +475,7 @@
 
         function calculateBollingerBands(data, period, stdDevMultiplier) {
             let middle = [], upper = [], lower = [];
-            if (!data || data.length < period) { // Robustez
+            if (!data || data.length < period) { 
                 const nulls = Array(data ? data.length : 0).fill(null);
                 return { middle: nulls, upper: nulls, lower: nulls };
             }
@@ -501,7 +501,7 @@
         function calculateRSI(data, period) {
             let rsiValues = [];
             
-            if (!data || data.length < period + 1) { // Robustez
+            if (!data || data.length < period + 1) { 
                 return Array(data ? data.length : 0).fill(null);
             }
 
@@ -577,7 +577,7 @@
 
             } catch (error) {
                 console.error(`Error al obtener datos de la API de Bybit para ${symbol}:`, error);
-                return null; // Retorna null si hay un error en la API
+                return null; 
             }
         }
         
@@ -595,6 +595,7 @@
          * @param {Array<object|null>} rsi - Datos del RSI.
          */
         function renderPriceChart(priceData, smaShort, smaLong, bb, rsi) {
+            console.log("renderPriceChart: Iniciando renderizado del gráfico."); // Debugging
             if (priceChartInstance) priceChartInstance.destroy();
 
             const ctx = priceChartCanvas.getContext('2d');
@@ -611,7 +612,9 @@
                 }
             ];
 
+            // Condicionales para agregar datasets de indicadores según los checkboxes
             if (toggleSmaShort.checked) {
+                console.log("renderPriceChart: Agregando SMA Corta."); // Debugging
                 datasets.push({ 
                     label: `SMA ${SMA_SHORT_PERIOD}`, 
                     data: smaShort.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null), 
@@ -623,6 +626,7 @@
                 });
             }
             if (toggleSmaLong.checked) {
+                console.log("renderPriceChart: Agregando SMA Larga."); // Debugging
                 datasets.push({ 
                     label: `SMA ${SMA_LONG_PERIOD}`, 
                     data: smaLong.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null), 
@@ -635,6 +639,7 @@
             }
             
             if (toggleBbUpper.checked) {
+                console.log("renderPriceChart: Agregando BB Superior."); // Debugging
                 datasets.push({ 
                     label: `BB Superior`, 
                     data: bb.upper.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null), 
@@ -646,6 +651,7 @@
                 });
             }
             if (toggleBbLower.checked) {
+                console.log("renderPriceChart: Agregando BB Inferior."); // Debugging
                 datasets.push({ 
                     label: `BB Inferior`, 
                     data: bb.lower.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null), 
@@ -659,6 +665,7 @@
                 });
             }
             if (toggleBbMiddle.checked) {
+                console.log("renderPriceChart: Agregando BB Media."); // Debugging
                 datasets.push({ 
                     label: `BB Media`, 
                     data: bb.middle.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null), 
@@ -671,7 +678,9 @@
                 });
             }
 
+            // Agregando el RSI si está marcado
             if (toggleRsi.checked) {
+                console.log("renderPriceChart: Agregando RSI."); // Debugging
                 datasets.push({
                     label: `RSI (${RSI_PERIOD})`,
                     data: rsi.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null),
@@ -682,6 +691,38 @@
                     yAxisID: 'y-rsi' 
                 });
             }
+
+            // Configuración de anotaciones para el RSI (condicional a toggleRsi.checked)
+            const annotations = {};
+            if (toggleRsi.checked) {
+                annotations.rsiOverboughtLine = { 
+                    type: 'line', 
+                    yMin: RSI_OVERBOUGHT, 
+                    yMax: RSI_OVERBOUGHT, 
+                    borderColor: 'red', 
+                    borderWidth: 1, 
+                    borderDash: [5, 5], 
+                    yAxisID: 'y-rsi', 
+                    label: { 
+                        content: 'Sobrecompra', enabled: true, position: 'start', // enabled: true aquí
+                        color: '#e0e0e0', backgroundColor: 'rgba(255, 0, 0, 0.5)'
+                    } 
+                };
+                annotations.rsiOversoldLine = { 
+                    type: 'line', 
+                    yMin: RSI_OVERSOLD, 
+                    yMax: RSI_OVERSOLD, 
+                    borderColor: 'green', 
+                    borderWidth: 1, 
+                    borderDash: [5, 5], 
+                    yAxisID: 'y-rsi', 
+                    label: { 
+                        content: 'Sobreventa', enabled: true, position: 'start', // enabled: true aquí
+                        color: '#e0e0e0', backgroundColor: 'rgba(0, 128, 0, 0.5)'
+                    } 
+                };
+            }
+
 
             priceChartInstance = new Chart(ctx, {
                 type: 'line',
@@ -720,7 +761,7 @@
                         },
                         'y-rsi': { 
                             type: 'linear',
-                            display: toggleRsi.checked, 
+                            display: toggleRsi.checked, // Eje RSI solo se muestra si el checkbox está marcado
                             position: 'right',
                             min: 0,
                             max: 100,
@@ -733,34 +774,7 @@
                         tooltip: { mode: 'index', intersect: false },
                         legend: { labels: { color: '#e0e0e0' } },
                         annotation: {
-                            annotations: {
-                                rsiOverboughtLine: { 
-                                    type: 'line', 
-                                    yMin: RSI_OVERBOUGHT, 
-                                    yMax: RSI_OVERBOUGHT, 
-                                    borderColor: 'red', 
-                                    borderWidth: 1, 
-                                    borderDash: [5, 5], 
-                                    yAxisID: 'y-rsi', 
-                                    label: { 
-                                        content: 'Sobrecompra', enabled: toggleRsi.checked, position: 'start', 
-                                        color: '#e0e0e0', backgroundColor: 'rgba(255, 0, 0, 0.5)'
-                                    } 
-                                },
-                                rsiOversoldLine: { 
-                                    type: 'line', 
-                                    yMin: RSI_OVERSOLD, 
-                                    yMax: RSI_OVERSOLD, 
-                                    borderColor: 'green', 
-                                    borderWidth: 1, 
-                                    borderDash: [5, 5], 
-                                    yAxisID: 'y-rsi', 
-                                    label: { 
-                                        content: 'Sobreventa', enabled: toggleRsi.checked, position: 'start', 
-                                        color: '#e0e0e0', backgroundColor: 'rgba(0, 128, 0, 0.5)'
-                                    } 
-                                }
-                            }
+                            annotations: annotations // Pasar el objeto de anotaciones construido condicionalmente
                         }
                     }
                 }
@@ -777,8 +791,8 @@
             let rsiRec = 'hold';
             let bbRec = 'hold';
 
-            const validSmaShort = smaShort ? smaShort.filter(v => v !== null) : []; // Robustez
-            const validSmaLong = smaLong ? smaLong.filter(v => v !== null) : [];   // Robustez
+            const validSmaShort = smaShort ? smaShort.filter(v => v !== null) : []; 
+            const validSmaLong = smaLong ? smaLong.filter(v => v !== null) : [];  
 
             if (validSmaShort.length >= 2 && validSmaLong.length >= 2) {
                 const lastSmaShort = validSmaShort[validSmaShort.length - 1].y;
@@ -801,7 +815,7 @@
                 smaSignalDiv.className = 'signal hold';
             }
 
-            const validRsi = rsi ? rsi.filter(v => v !== null) : []; // Robustez
+            const validRsi = rsi ? rsi.filter(v => v !== null) : []; 
             if (validRsi.length > 0) {
                 const lastRsi = validRsi[validRsi.length - 1].y;
                 if (lastRsi > RSI_OVERBOUGHT) {
@@ -819,9 +833,9 @@
                 rsiSignalDiv.className = 'signal hold';
             }
 
-            const validBbUpper = bollingerBands.upper ? bollingerBands.upper.filter(v => v !== null) : []; // Robustez
-            const validBbLower = bollingerBands.lower ? bollingerBands.lower.filter(v => v !== null) : []; // Robustez
-            const lastPrice = closingPrices ? closingPrices[closingPrices.length - 1] : undefined; // Robustez
+            const validBbUpper = (bollingerBands && bollingerBands.upper) ? bollingerBands.upper.filter(v => v !== null) : []; 
+            const validBbLower = (bollingerBands && bollingerBands.lower) ? bollingerBands.lower.filter(v => v !== null) : []; 
+            const lastPrice = closingPrices ? closingPrices[closingPrices.length - 1] : undefined; 
 
             if (validBbUpper.length > 0 && validBbLower.length > 0 && lastPrice !== undefined) {
                 const lastBbUpper = validBbUpper[validBbUpper.length - 1].y;
@@ -1036,6 +1050,13 @@
                 bbSignalDiv.textContent = 'Error: Datos insuficientes.';
                 updateTimerDiv.textContent = "Datos insuficientes para indicadores";
                 
+                // Aseguramos que currentPriceDataCache y otros caches sean nulls/vacíos si no hay datos
+                currentPriceDataCache = [];
+                currentSmaShortCache = [];
+                currentSmaLongCache = [];
+                currentBollingerBandsCache = {middle:[], upper:[], lower:[]};
+                currentRsiCache = [];
+
                 if (priceChartInstance) priceChartInstance.destroy();
                 priceChartCanvas.style.display = 'none';
                 priceNoDataMessage.textContent = "Datos insuficientes para gráficos."
@@ -1061,12 +1082,10 @@
             renderPriceChart(currentPriceDataCache, currentSmaShortCache, currentSmaLongCache, currentBollingerBandsCache, currentRsiCache);
             
             console.log("runSelectedCryptoAnalysis: Actualizando señales individuales...");
-            // Aseguramos que los resultados de getCombinedSignals se pasen
             const signals = getCombinedSignals(currentSmaShortCache, currentSmaLongCache, currentRsiCache, currentBollingerBandsCache, closingPrices);
             updateSignals(currentSmaShortCache, currentSmaLongCache, currentRsiCache, currentBollingerBandsCache, closingPrices); // Actualiza los paneles individuales
 
             console.log("runSelectedCryptoAnalysis: Intentando guardar recomendación en backend...");
-            // Usamos signals.overall directamente, que ahora debería estar correctamente definido.
             await saveRecommendationToBackend(selectedSymbol, signals.overall); 
             console.log("runSelectedCryptoAnalysis: Recomendación enviada a backend.");
 
@@ -1105,7 +1124,6 @@
                         tempRecommendations.hold.push(`${symbol} (Datos Insuficientes)`); 
                     } else {
                         const closingPrices = prices.map(p => p.y);
-                        // Asegurar que los resultados de calculateX no sean null antes de pasarlos a getCombinedSignals
                         const smaShort = calculateSMA(closingPrices, SMA_SHORT_PERIOD);
                         const smaLong = calculateSMA(closingPrices, SMA_LONG_PERIOD);
                         const bollingerBands = calculateBollingerBands(closingPrices, BB_PERIOD, BB_STD_DEV);
@@ -1223,6 +1241,7 @@
         const indicatorCheckboxes = document.querySelectorAll('#indicator-selection-panel input[type="checkbox"]');
         indicatorCheckboxes.forEach(checkbox => {
             checkbox.addEventListener('change', () => {
+                // Volver a renderizar el gráfico con los datos en caché
                 if (currentPriceDataCache) { 
                     renderPriceChart(currentPriceDataCache, currentSmaShortCache, currentSmaLongCache, currentBollingerBandsCache, currentRsiCache);
                 } else {
