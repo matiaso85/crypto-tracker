@@ -1,3 +1,0 @@
-Flask
-Flask-Cors
-gunicorn  # Render necesita Gunicorn para ejecutar tu app de Flask en producción
