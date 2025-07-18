@@ -1027,6 +1027,10 @@
                 priceChartCanvas.style.display = 'none';
                 priceNoDataMessage.textContent = "Datos insuficientes para gráficos."
                 priceNoDataMessage.style.display = 'flex';
+                // Aunque no haya datos para el gráfico, intentamos guardar una señal de "HOLD"
+                // para que se registre el intento.
+                console.log("runSelectedCryptoAnalysis: Intentando guardar 'HOLD' por datos insuficientes.");
+                await saveRecommendationToBackend(selectedSymbol, 'hold'); // Guardar 'hold' si no hay datos suficientes
                 return;
             }
 
@@ -1045,7 +1049,6 @@
             renderPriceChart(currentPriceDataCache, currentSmaShortCache, currentSmaLongCache, currentBollingerBandsCache, currentRsiCache);
             
             console.log("runSelectedCryptoAnalysis: Actualizando señales individuales...");
-            // Aquí obtenemos las señales combinadas directamente
             const signals = getCombinedSignals(currentSmaShortCache, currentSmaLongCache, currentRsiCache, currentBollingerBandsCache, closingPrices);
             updateSignals(currentSmaShortCache, currentSmaLongCache, currentRsiCache, currentBollingerBandsCache, closingPrices); // Actualiza los paneles individuales
 
