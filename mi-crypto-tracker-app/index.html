@@ -1093,7 +1093,6 @@
                 priceNoDataMessage.style.display = 'flex';
                 // Si no hay datos suficientes, se guarda una recomendación 'hold' para registrar el evento
                 console.log("runSelectedCryptoAnalysis: Guardando 'HOLD' por datos insuficientes.");
-                // Aunque no haya señales individuales, se envía "N/A" para evitar errores en el backend
                 await saveRecommendationToBackend(selectedSymbol, 'hold', {sma: 'N/A', rsi: 'N/A', bb: 'N/A'}); 
                 return;
             }
@@ -1117,7 +1116,6 @@
             updateSignals(currentSmaShortCache, currentSmaLongCache, currentRsiCache, currentBollingerBandsCache, closingPrices); // Actualiza los paneles individuales
 
             console.log("runSelectedCryptoAnalysis: Intentando guardar recomendación en backend...");
-            // Enviamos las señales individuales también para que el backend pueda usarlas en el cálculo de métricas
             await saveRecommendationToBackend(selectedSymbol, signals.overall, signals); 
             console.log("runSelectedCryptoAnalysis: Recomendación enviada a backend.");
 
@@ -1203,13 +1201,19 @@
                 const prevSmaLong = validSmaLong[validSmaLong.length - 2].y;
                 if (prevSmaShort <= prevSmaLong && lastSmaShort > lastSmaLong) smaRec = 'buy';
                 else if (prevSmaShort >= prevSmaLong && lastSmaLong < lastSmaLong) smaRec = 'sell';
+            } else {
+                // Si no hay suficientes datos válidos para SMA, la señal SMA es "N/A"
+                smaRec = 'N/A';
             }
 
+
             const validRsi = rsi ? rsi.filter(v => v !== null) : [];
-            if (validRsi.length > 0) {
+            if (validRsi.length > 0) { // Necesita al menos un punto válido
                 const lastRsi = validRsi[validRsi.length - 1].y;
                 if (lastRsi > RSI_OVERBOUGHT) rsiRec = 'sell';
                 else if (lastRsi < RSI_OVERSOLD) rsiRec = 'buy';
+            } else {
+                rsiRec = 'N/A';
             }
 
             const validBbUpper = (bollingerBands && bollingerBands.upper) ? bollingerBands.upper.filter(v => v !== null) : [];
@@ -1221,32 +1225,44 @@
                 const lastBbLower = validBbLower[validBbLower.length - 1].y;
                 if (lastPrice > lastBbUpper) bbRec = 'sell';
                 else if (lastPrice < lastBbLower) bbRec = 'buy';
+            } else {
+                bbRec = 'N/A';
             }
 
             let buyCount = 0;
             let sellCount = 0;
+            let naCount = 0; // Contar indicadores no disponibles
 
             if (smaRec === 'buy') buyCount++;
-            if (rsiRec === 'buy') buyCount++;
-            if (bbRec === 'buy') buyCount++;
+            else if (smaRec === 'sell') sellCount++;
+            else naCount++; // Si es 'hold' o 'N/A'
 
-            if (smaRec === 'sell') sellCount++;
-            if (rsiRec === 'sell') sellCount++;
-            if (bbRec === 'sell') sellCount++;
+            if (rsiRec === 'buy') buyCount++;
+            else if (rsiRec === 'sell') sellCount++;
+            else naCount++;
+
+            if (bbRec === 'buy') buyCount++;
+            else if (bbRec === 'sell') sellCount++;
+            else naCount++;
 
             let overallRecommendation = 'hold';
 
-            // Lógica de Confluencia MEJORADA
-            console.log(`getCombinedSignals: Recs individuales: SMA=${smaRec}, RSI=${rsiRec}, BB=${bbRec}`); 
-            if (buyCount >= 2 && sellCount === 0) { 
-                overallRecommendation = 'buy';
-            } else if (sellCount >= 2 && buyCount === 0) { 
-                overallRecommendation = 'sell';
-            } else { 
+            // Lógica de Confluencia MEJORADA y más estricta
+            // Solo si hay al menos 2 indicadores disponibles para decidir
+            if ((buyCount + sellCount) >= 2) { 
+                if (buyCount >= 2 && sellCount === 0) { // Al menos 2 compras y ninguna venta
+                    overallRecommendation = 'buy';
+                } else if (sellCount >= 2 && buyCount === 0) { // Al menos 2 ventas y ninguna compra
+                    overallRecommendation = 'sell';
+                } else { // Cualquier otro caso (empate, contradicciones, o solo 1 señal fuerte)
+                    overallRecommendation = 'hold';
+                }
+            } else { // Si no hay suficientes indicadores disponibles (por ejemplo, todos son N/A o solo 1 es válido)
                 overallRecommendation = 'hold';
+                console.log(`getCombinedSignals: Recomendación forzada a HOLD por datos insuficientes de indicadores individuales.`); // Depuración
             }
             
-            console.log(`getCombinedSignals: Recomendación Combinada: ${overallRecommendation}`); 
+            console.log(`getCombinedSignals: Recs individuales: SMA=${smaRec}, RSI=${rsiRec}, BB=${bbRec}. Combinada: ${overallRecommendation}`); 
             return { sma: smaRec, rsi: rsiRec, bb: bbRec, overall: overallRecommendation };
         }
 
@@ -1261,6 +1277,7 @@
             initStaticCryptoList(); 
 
             if (allCryptos.length > 0) {
+                // Ejecución inicial y configuración de intervalos
                 runSelectedCryptoAnalysis(); 
                 updateAllCryptosOpportunities();
                 loadHistoricalRecommendationsFromBackend(); 
