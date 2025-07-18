@@ -5,15 +5,19 @@ import os
 from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.background import BackgroundScheduler 
 import asyncio 
-import httpx # Importar httpx aquí ya que se usa en get_bybit_klines
+import httpx 
 
 app = Flask(__name__)
-CORS(app) 
+CORS(app)
 
 # --- CONFIGURACIÓN BACKEND ---
-BYBIT_INTERVAL = "60" 
-BYBIT_CATEGORY = "spot"
-BYBIT_LIMIT = 200 
+# CAMBIADO: Usaremos parámetros de Binance API
+BINANCE_INTERVAL = "1h" # 1 hora para Binance
+BINANCE_LIMIT = 200 # Máximo de klines a obtener de Binance por petición
+
+# BYBIT_INTERVAL = "60" # Ya no se usa directamente para fetching
+# BYBIT_CATEGORY = "spot" # Ya no se usa directamente para fetching
+# BYBIT_LIMIT = 200 # Ya no se usa directamente para fetching
 
 SAVE_REC_TO_BACKEND_INTERVAL = timedelta(hours=1) 
 PRICE_CHANGE_THRESHOLD = 0.03 
@@ -23,13 +27,17 @@ LAST_REC_FILE = 'last_recommendations.csv'
 
 current_analysis_cache = {} 
 
+# --- Lista de Símbolos a Monitorear (Ajustados para Binance, verificar si hay cambios) ---
 SYMBOLS_TO_MONITOR = [
     "BTCUSDT", "ETHUSDT", "BNBUSDT", "XRPUSDT", "SOLUSDT", "ADAUSDT", 
     "DOGEUSDT", "SHIBUSDT", "DOTUSDT", "LTCUSDT", "LINKUSDT", "MATICUSDT",
     "TRXUSDT", "AVAXUSDT", "UNIUSDT", "FILUSDT", "ICPUSDT", "APTUSDT", 
-    "SUIUSDT", "NEARUSDT", "ATOMUSDT", "ARBUSD", "OPUSDT", "IMXUSDT",
+    "SUIUSDT", "NEARUSDT", "ATOMUSDT", "ARB", "OP", "IMX", # Binance a veces usa símbolos sin USDT final
     "AAVEUSDT", "ALGOUSDT", "FTMUSDT", "VETUSDT", "CHZUSDT", "GRTUSDT",
     "AXSUSDT", "EOSUSDT", "SANDUSDT", "MANAUSDT",
+    # Stablecoins en Binance suelen ser solo el ticker (ej. BUSD, DAI, USDC)
+    # Si quieres USDT/USDC, busca el par exacto en Binance. Podría ser USDCUSDT, o no existir como par directo.
+    # "USDCUSDT", "BUSDUSDT", "DAIUSDT" 
 ]
 
 
@@ -99,9 +107,11 @@ def update_last_recommendation_file(symbol, timestamp_iso, recommendation, sma_r
         writer.writeheader()
         writer.writerows(updated_rows)
 
-# --- FUNCIONES DE OBTENCIÓN DE DATOS (Bybit API - Portadas de JS a Python) ---
-async def get_bybit_klines(symbol, interval=BYBIT_INTERVAL, category=BYBIT_CATEGORY, limit=BYBIT_LIMIT):
-    url = f"https://api.bybit.com/v5/market/kline?category={category}&symbol={symbol}&interval={interval}&limit={limit}"
+# --- FUNCIONES DE OBTENCIÓN DE DATOS (AHORA PARA BINANCE) ---
+async def get_binance_klines(symbol, interval=BINANCE_INTERVAL, limit=BINANCE_LIMIT):
+    import httpx 
+    # Endpoint de Binance para klines
+    url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={interval}&limit={limit}"
     
     try:
         async with httpx.AsyncClient() as client:
@@ -110,32 +120,35 @@ async def get_bybit_klines(symbol, interval=BYBIT_INTERVAL, category=BYBIT_CATEG
             
             data = response.json()
             
-            if not data or not data.get('result') or not data['result'].get('list'):
-                raise ValueError(f"API de Bybit para {symbol} devolvió respuesta válida pero sin datos de klines.")
+            if not data or not isinstance(data, list) or len(data) == 0: # Binance devuelve lista directa
+                raise ValueError(f"API de Binance para {symbol} devolvió respuesta válida pero sin datos de klines.")
             
             formatted_prices = []
-            for kline in data['result']['list']:
+            for kline in data:
+                # kline: [open_time, open, high, low, close, volume, close_time, ...]
                 formatted_prices.append({
-                    'x': int(kline[0]),
-                    'y': float(kline[4]) # Precio de cierre
+                    'x': int(kline[0]),      # Open time (timestamp en milisegundos)
+                    'y': float(kline[4])     # Close price (precio de cierre)
                 })
             
-            return formatted_prices[::-1] # Revertir para que sea del más antiguo al más nuevo
+            return formatted_prices # Binance ya devuelve del más antiguo al más nuevo, no necesita reverse()
 
     except httpx.HTTPStatusError as e:
-        print(f"Error HTTP de Bybit para {symbol}: {e.response.status_code} - {e.response.text}")
+        print(f"Error HTTP de Binance para {symbol}: {e.response.status_code} - {e.response.text}")
         return None
     except httpx.RequestError as e:
-        print(f"Error de red al conectar con Bybit para {symbol}: {e}")
+        print(f"Error de red al conectar con Binance para {symbol}: {e}")
         return None
     except ValueError as e:
-        print(f"Error de datos de Bybit para {symbol}: {e}")
+        print(f"Error de datos de Binance para {symbol}: {e}")
         return None
     except Exception as e:
-        print(f"Error inesperado al obtener datos de Bybit para {symbol}: {e}")
+        print(f"Error inesperado al obtener datos de Binance para {symbol}: {e}")
         return None
 
+
 # --- FUNCIONES DE CÁLCULO DE INDICADORES (Portadas de JS a Python) ---
+# ... (Estas funciones son las mismas, no se cambian) ...
 def calculate_sma(data, period):
     sma = []
     if not data or len(data) < period:
@@ -293,7 +306,8 @@ async def scheduled_analysis_job(symbols):
     for symbol in symbols:
         try:
             print(f"[{datetime.now().isoformat()}] Analyzing {symbol}...")
-            klines_data = await get_bybit_klines(symbol)
+            # CAMBIADO: Usar get_binance_klines en lugar de get_bybit_klines
+            klines_data = await get_binance_klines(symbol) 
             
             min_required_klines = max(20, 50, 14) + 1 
             if not klines_data or len(klines_data) < min_required_klines:
@@ -451,7 +465,8 @@ async def get_latest_analysis(symbol):
     # Si no está en cache o no hay klines, intentar obtenerlos (esto es síncrono para la ruta, lo ideal es que la cache ya esté llena por el scheduler)
     print(f"[{datetime.now().isoformat()}] Cache miss for {symbol}, trying to fetch live. (This should be rare if scheduler runs)")
     try:
-        klines_data = await get_bybit_klines(symbol)
+        # CAMBIADO: Usar get_binance_klines en lugar de get_bybit_klines
+        klines_data = await get_binance_klines(symbol) 
         
         # --- VALIDACIÓN DE DATOS PARA CÁLCULO (Duplicado del scheduler, pero necesario si el cache falla) ---
         min_required_klines = max(20, 50, 14) + 1 
@@ -499,10 +514,19 @@ SYMBOLS_TO_MONITOR = [
     "BTCUSDT", "ETHUSDT", "BNBUSDT", "XRPUSDT", "SOLUSDT", "ADAUSDT", 
     "DOGEUSDT", "SHIBUSDT", "DOTUSDT", "LTCUSDT", "LINKUSDT", "MATICUSDT",
     "TRXUSDT", "AVAXUSDT", "UNIUSDT", "FILUSDT", "ICPUSDT", "APTUSDT", 
-    "SUIUSDT", "NEARUSDT", "ATOMUSDT", "ARBUSD", "OPUSDT", "IMXUSDT",
+    "SUIUSDT", "NEARUSDT", "ATOMUSDT", "ARB", "OP", "IMX", # Símbolos de Binance sin USDT
     "AAVEUSDT", "ALGOUSDT", "FTMUSDT", "VETUSDT", "CHZUSDT", "GRTUSDT",
     "AXSUSDT", "EOSUSDT", "SANDUSDT", "MANAUSDT",
 ]
+
+# Ajuste para símbolos de Binance que no tienen 'USDT' en el ticker, pero son pares USDT
+# Esto es una simplificación, si un símbolo no es 'ARB', 'OP', 'IMX', se asume 'USDT'
+BINANCE_SYMBOLS_MAP = {
+    "ARB": "ARBUSD", # Asume que ARB es ARBUSDT en Binance
+    "OP": "OPUSDT",
+    "IMX": "IMXUSDT",
+}
+
 
 # Añadir la tarea programada: Ejecuta 'scheduled_analysis_job' cada 2 minutos
 scheduler.add_job(
