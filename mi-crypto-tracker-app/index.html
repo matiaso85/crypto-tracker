@@ -1015,6 +1015,12 @@
         // ===================================================================================
 
         async function runSelectedCryptoAnalysis() {
+console.log("DEBUG: Datos para renderizado de gráfico:");
+console.log("DEBUG: currentPriceDataCache (primeros 5):", currentPriceDataCache ? currentPriceDataCache.slice(0, 5) : null, "Length:", currentPriceDataCache ? currentPriceDataCache.length : 0);
+console.log("DEBUG: currentSmaShortCache (primeros 5):", currentSmaShortCache ? currentSmaShortCache.slice(0, 5) : null, "Length:", currentSmaShortCache ? currentSmaShortCache.length : 0);
+console.log("DEBUG: currentSmaLongCache (primeros 5):", currentSmaLongCache ? currentSmaLongCache.slice(0, 5) : null, "Length:", currentSmaLongCache ? currentSmaLongCache.length : 0);
+console.log("DEBUG: currentBollingerBandsCache (middle, primeros 5):", currentBollingerBandsCache && currentBollingerBandsCache.middle ? currentBollingerBandsCache.middle.slice(0, 5) : null, "Length:", currentBollingerBandsCache && currentBollingerBandsCache.middle ? currentBollingerBandsCache.middle.length : 0);
+console.log("DEBUG: currentRsiCache (primeros 5):", currentRsiCache ? currentRsiCache.slice(0, 5) : null, "Length:", currentRsiCache ? currentRsiCache.length : 0);
             console.log("Inicio de runSelectedCryptoAnalysis.");
             if (countdownInterval) clearInterval(countdownInterval);
 
