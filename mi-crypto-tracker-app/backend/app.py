@@ -398,10 +398,12 @@ async def scheduled_analysis_job(symbols):
 
                 if last_prev_rec != 'N/A' and current_overall_rec != 'N/A':
                     if current_overall_rec == last_prev_rec:
-        match_count = 0
-        if individual_recs['sma'] == last_prev_sma_rec and individual_recs['sma'] != 'N/A': match_count += 1
-        if individual_recs['rsi'] == last_prev_rsi_rec and individual_recs['rsi'] != 'N/A': match_count += 1
-        if individual_recs['bb'] == last_prev_bb_rec and individual_recs['bb'] != 'N/A': match_count += 1
+       if individual_recs['sma'] == last_prev_sma_rec and individual_recs['sma'] != 'N/A':
+            match_count += 1
+        if individual_recs['rsi'] == last_prev_rsi_rec and individual_recs['rsi'] != 'N/A':
+            match_count += 1
+        if individual_recs['bb'] == last_prev_bb_rec and individual_recs['bb'] != 'N/A':
+            match_count += 1
         metric_value = (match_count / 3) * 100 if match_count > 0 else 0
 
         if match_count >= 2:
@@ -410,37 +412,28 @@ async def scheduled_analysis_job(symbols):
         else:
             metric_type = 'N/A'
             details = f"Rec. mantenida pero pocos indicadores coinciden ({match_count}/3)."
-                        details = f"Rec. mantenida. Indicadores coincidentes: {match_count}/3."
-                    else:
-                        metric_type = 'Riesgo'
-                        change_count = 0
-                        if individual_recs['sma'] != last_prev_sma_rec and individual_recs['sma'] != 'N/A': change_count += 1
-                        if individual_recs['rsi'] != last_prev_rsi_rec and individual_recs['rsi'] != 'N/A': change_count += 1
-                        if individual_recs['bb'] != last_prev_bb_rec and individual_recs['bb'] != 'N/A': change_count += 1
-                        metric_value = (change_count / 3) * 100 if change_count > 0 else 0
-                        details = f"Rec. cambió de '{last_prev_rec}' a '{current_overall_rec}'. Indicadores cambiantes: {change_count}/3."
-                else:
-                    details = "Primera recomendación para el símbolo o datos insuficientes para comparar."
 
-                with open(CSV_FILE, mode='a', newline='', encoding='utf-8') as file:
-                    writer = csv.writer(file)
-                    writer.writerow([
-                        now_dt.isoformat().replace('+00:00', 'Z'), # Formato ISO para JS
-                        symbol,
-                        current_overall_rec,
-                        last_prev_rec,
-                        metric_type,
-                        round(metric_value, 2),
-                        details
-                    ])
-                
-                update_last_recommendation_file(symbol, now_dt.isoformat().replace('+00:00', 'Z'), current_overall_rec, individual_recs['sma'], individual_recs['rsi'], individual_recs['bb'], current_price)
-                print(f"[{datetime.now().isoformat()}] Saved new entry for {symbol}: {current_overall_rec}, Price: {current_price}")
-            else:
-                print(f"[{datetime.now().isoformat()}] Skipping save for {symbol}: No significant change or time not passed.")
+    else:
+        change_count = 0
+        if individual_recs['sma'] != last_prev_sma_rec and individual_recs['sma'] != 'N/A':
+            change_count += 1
+        if individual_recs['rsi'] != last_prev_rsi_rec and individual_recs['rsi'] != 'N/A':
+            change_count += 1
+        if individual_recs['bb'] != last_prev_bb_rec and individual_recs['bb'] != 'N/A':
+            change_count += 1
+        metric_value = (change_count / 3) * 100 if change_count > 0 else 0
 
-        except Exception as e:
-            print(f"[{datetime.now().isoformat()}] Error in scheduled analysis for {symbol}: {e}")
+        if change_count >= 1:
+            metric_type = 'Riesgo'
+            details = f"Rec. cambió de '{last_prev_rec}' a '{current_overall_rec}'. Indicadores cambiantes: {change_count}/3."
+        else:
+            metric_type = 'N/A'
+            details = f"Rec. cambió pero sin cambios detectados en indicadores."
+
+else:
+    details = "Primera recomendación para el símbolo o datos insuficientes para comparar."
+    metric_type = 'N/A'
+    metric_value = 0.0
 
 # --- RUTAS DE LA API ---
 
