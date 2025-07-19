@@ -324,6 +324,28 @@
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@1.0.2"></script>
 </head>
 <body>
+    <script>
+// Agrega esta funcion nueva junto con las demas
+async function loadCurrentOpportunitiesFromBackend() {
+    try {
+        const response = await fetch(`${BACKEND_URL}/get_current_opportunities`);
+        if (!response.ok) {
+            console.error("Error al obtener oportunidades actuales:", response.statusText);
+            return;
+        }
+        const data = await response.json();
+        renderOpportunityColumns(data);
+    } catch (error) {
+        console.error("Fallo en la carga de oportunidades desde backend:", error);
+    }
+}
+
+// Llama esta funcion cada 5 minutos
+setInterval(loadCurrentOpportunitiesFromBackend, UPDATE_INTERVAL_ALL_CRYPTOS);
+
+// Llamar al iniciar
+loadCurrentOpportunitiesFromBackend();
+</script>
     <h1>Crypto Tracker Online (Backend Driven)</h1>
 
     <div class="top-section-container">
