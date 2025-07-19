@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Crypto Tracker Online (Backend Driven)</title>
+    <title>Crypto Tracker Online (Bybit + Backend)</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -290,48 +290,47 @@
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@1.0.2"></script>
 </head>
 <body>
-    <h1>Crypto Tracker Online (Backend Driven)</h1>
+    <h1>Crypto Tracker Online (Bybit + Backend)</h1>
 
     <div class="top-section-container">
         <div id="controls">
             <label for="coin-select">Elige una Criptomoneda:</label>
             <select id="coin-select">
-        <option value="BTC-USDT" selected>Bitcoin (BTC-USDT)</option>
-    <option value="ETH-USDT">Ethereum (ETH-USDT)</option>
-    <option value="BNB-USDT">BNB (BNB-USDT)</option>
-    <option value="XRP-USDT">XRP (XRP-USDT)</option>
-    <option value="SOL-USDT">Solana (SOL-USDT)</option>
-    <option value="ADA-USDT">Cardano (ADA-USDT)</option>
-    <option value="DOGE-USDT">Dogecoin (DOGE-USDT)</option>
-    <option value="SHIB-USDT">Shiba Inu (SHIB-USDT)</option>
-    <option value="DOT-USDT">Polkadot (DOT-USDT)</option>
-    <option value="LTC-USDT">Litecoin (LTC-USDT)</option>
-    <option value="LINK-USDT">Chainlink (LINK-USDT)</option>
-    <option value="MATIC-USDT">Polygon (MATIC-USDT)</option>
-    <option value="TRX-USDT">Tron (TRX-USDT)</option>
-    <option value="AVAX-USDT">Avalanche (AVAX-USDT)</option>
-    <option value="UNI-USDT">Uniswap (UNI-USDT)</option>
-    <option value="FIL-USDT">Filecoin (FIL-USDT)</option>
-    <option value="ICP-USDT">Internet Computer (ICP-USDT)</option>
-    <option value="APT-USDT">Aptos (APT-USDT)</option>
-    <option value="SUI-USDT">Sui (SUI-USDT)</option>
-    <option value="NEAR-USDT">NEAR Protocol (NEAR-USDT)</option>
-    <option value="ATOM-USDT">Cosmos (ATOM-USDT)</option>
-    <option value="ARB-USDT">Arbitrum (ARB-USDT)</option>
-    <option value="OP-USDT">Optimism (OP-USDT)</option>
-    <option value="IMX-USDT">Immutable X (IMX-USDT)</option>
-    <option value="AAVE-USDT">Aave (AAVE-USDT)</option>
-    <option value="ALGO-USDT">Algorand (ALGO-USDT)</option>
-    <option value="FTM-USDT">Fantom (FTM-USDT)</option>
-    <option value="VET-USDT">VeChain (VET-USDT)</option>
-    <option value="CHZ-USDT">Chiliz (CHZ-USDT)</option>
-    <option value="GRT-USDT">The Graph (GRT-USDT)</option>
-    <option value="AXS-USDT">Axie Infinity (AXS-USDT)</option>
-    <option value="EOS-USDT">EOS (EOS-USDT)</option>
-    <option value="SAND-USDT">The Sandbox (SAND-USDT)</option>
-    <option value="MANA-USDT">Decentraland (MANA-USDT)</option>
-    <option value="USDC-USDT">USDC (USDC-USDT)</option>
-    </select>
+                <option value="BTC-USDT" selected>Bitcoin (BTC-USDT)</option>
+                <option value="ETH-USDT">Ethereum (ETH-USDT)</option>
+                <option value="BNB-USDT">BNB (BNB-USDT)</option>
+                <option value="XRP-USDT">XRP (XRP-USDT)</option>
+                <option value="SOL-USDT">Solana (SOL-USDT)</option>
+                <option value="ADA-USDT">Cardano (ADA-USDT)</option>
+                <option value="DOGE-USDT">Dogecoin (DOGE-USDT)</option>
+                <option value="SHIB-USDT">Shiba Inu (SHIB-USDT)</option>
+                <option value="DOT-USDT">Polkadot (DOT-USDT)</option>
+                <option value="LTC-USDT">Litecoin (LTC-USDT)</option>
+                <option value="LINK-USDT">Chainlink (LINK-USDT)</option>
+                <option value="MATIC-USDT">Polygon (MATIC-USDT)</option>
+                <option value="TRX-USDT">Tron (TRX-USDT)</option>
+                <option value="AVAX-USDT">Avalanche (AVAX-USDT)</option>
+                <option value="UNI-USDT">Uniswap (UNI-USDT)</option>
+                <option value="FIL-USDT">Filecoin (FIL-USDT)</option>
+                <option value="ICP-USDT">Internet Computer (ICP-USDT)</option>
+                <option value="APT-USDT">Aptos (APT-USDT)</option>
+                <option value="SUI-USDT">Sui (SUI-USDT)</option>
+                <option value="NEAR-USDT">NEAR Protocol (NEAR-USDT)</option>
+                <option value="ATOM-USDT">Cosmos (ATOM-USDT)</option>
+                <option value="ARB-USDT">Arbitrum (ARB-USDT)</option>
+                <option value="OP-USDT">Optimism (OP-USDT)</option>
+                <option value="IMX-USDT">Immutable X (IMX-USDT)</option>
+                <option value="AAVE-USDT">Aave (AAVE-USDT)</option>
+                <option value="ALGO-USDT">Algorand (ALGO-USDT)</option>
+                <option value="FTM-USDT">Fantom (FTM-USDT)</option>
+                <option value="VET-USDT">VeChain (VET-USDT)</option>
+                <option value="CHZ-USDT">Chiliz (CHZ-USDT)</option>
+                <option value="GRT-USDT">The Graph (GRT-USDT)</option>
+                <option value="EOS-USDT">EOS (EOS-USDT)</option>
+                <option value="SAND-USDT">The Sandbox (SAND-USDT)</option>
+                <option value="MANA-USDT">Decentraland (MANA-USDT)</option>
+                <option value="USDC-USDT">USDC (USDC-USDT)</option>
+                </select>
             <div id="update-timer"></div>
             <p style="font-size: 0.8em; color: #888; margin-top: 10px;">
                 Selecciona una criptomoneda para ver su análisis detallado (gráficos y señales individuales).
@@ -437,20 +436,17 @@
         // ===================================================================================
 
         // URL BASE DE TU BACKEND (¡IMPORTANTE: Cambiar esto cuando lo publiques!)
-        // Después de publicar en Render, usa la URL que Render te dé (ej. 'https://tu-backend-nombre.onrender.com')
         const BACKEND_URL = 'https://crypto-tracker-ukyl.onrender.com'; 
 
-        // Parámetros de la API de Bybit (ahora manejados principalmente por el backend)
-        const BYBIT_INTERVAL = "60"; 
-        const BYBIT_CATEGORY = "spot";
-        const BYBIT_LIMIT = 200; 
+        // Parámetros de la API de KuCoin (ahora manejados principalmente por el backend)
+        const KUCOIN_INTERVAL = "1hour"; // Corregido el nombre a KUCOIN
+        const KUCOIN_LIMIT = 200; 
 
         // Intervalos de actualización para el frontend
-        const UPDATE_INTERVAL_SELECTED_CRYPTO = 10000; // 10 segundos para actualizar el gráfico de la crypto seleccionada
-        const UPDATE_INTERVAL_ALL_CRYPTOS = 60000; // 1 minuto para actualizar el tablero de todas las oportunidades
+        const UPDATE_INTERVAL_SELECTED_CRYPTO = 120000; // 2 minutos para actualizar el gráfico de la crypto seleccionada
+        const UPDATE_INTERVAL_ALL_CRYPTOS = 5 * 60 * 1000; // 5 minutos para actualizar TODAS las oportunidades
         const HISTORY_UPDATE_INTERVAL = 60000; // 1 minuto para actualizar el historial
 
-        // Parámetros de indicadores técnicos (usados solo en frontend para renderizar)
         const SMA_SHORT_PERIOD = 20;
         const SMA_LONG_PERIOD = 50;
         const BB_PERIOD = 20;
@@ -459,7 +455,6 @@
         const RSI_OVERBOUGHT = 70;
         const RSI_OVERSOLD = 30;
 
-        // Referencias a elementos del DOM
         const coinSelect = document.getElementById('coin-select');
         const updateTimerDiv = document.getElementById('update-timer');
         const smaSignalDiv = document.getElementById('sma-signal');
@@ -487,7 +482,6 @@
         let priceChartInstance, countdownInterval;
         let allCryptos = []; 
 
-        // Caches para los datos de la cripto seleccionada (para redibujar el gráfico localmente)
         let currentPriceDataCache = null;
         let currentSmaShortCache = null;
         let currentSmaLongCache = null;
@@ -545,14 +539,67 @@
         // Las mantenemos aquí para que Chart.js las use internamente al mapear datasets
         // o si quisieras alguna lógica específica en el futuro.
         // ===================================================================================
-        function calculateSMA(data, period) { /* ... lógica ... */ return Array(data ? data.length : 0).fill(null); } // Lógica simplificada, el backend hace el cálculo real
-        function calculateBollingerBands(data, period, stdDevMultiplier) { /* ... lógica ... */ return { middle: [], upper: [], lower: [] }; } // Lógica simplificada
-        function calculateRSI(data, period) { /* ... lógica ... */ return Array(data ? data.length : 0).fill(null); } // Lógica simplificada
+        function calculateSMA(data, period) { 
+            let sma = [];
+            if (!data || data.length < period) return Array(data ? data.length : 0).fill(null); 
+            for (let i = 0; i < data.length; i++) {
+                if (i < period - 1) { sma.push(null); } else {
+                    const slice = data.slice(i - period + 1, i + 1);
+                    const sum = slice.reduce((acc, val) => acc + val, 0);
+                    sma.push({ y: sum / period });
+                }
+            }
+            return sma;
+        } 
+        function calculateBollingerBands(data, period, stdDevMultiplier) { 
+            let middle = [], upper = [], lower = [];
+            if (!data || data.length < period) { const nulls = Array(data ? data.length : 0).fill(null); return { middle: nulls, upper: nulls, lower: nulls }; }
+            for (let i = 0; i < data.length; i++) {
+                if (i < period - 1) { middle.push(null); upper.push(null); lower.push(null); } else {
+                    const slice = data.slice(i - period + 1, i + 1);
+                    const mean = slice.reduce((acc, val) => acc + val, 0) / period;
+                    const stdDev = Math.sqrt(slice.reduce((acc, val) => acc + Math.pow(val - mean, 2), 0) / period);
+                    middle.push({ y: mean }); upper.push({ y: mean + (stdDev * stdDevMultiplier) }); lower.push({ y: mean - (stdDev * stdDevMultiplier) });
+                }
+            }
+            return { middle, upper, lower };
+        } 
+        function calculateRSI(data, period) { 
+            let rsiValues = [];
+            if (!data || data.length < period + 1) { return Array(data ? data.length : 0).fill(null); }
+            for (let i = 0; i < period; i++) { rsiValues.push(null); }
+            let avgGain = 0; let avgLoss = 0;
+            for (let i = 1; i <= period; i++) { const diff = data[i] - data[i - 1]; if (diff > 0) { avgGain += diff; } else { avgLoss += Math.abs(diff); } }
+            avgGain /= period; avgLoss /= period;
+            if (avgLoss === 0) { rsiValues.push({ y: 100 }); } else { const rs = avgGain / avgLoss; rsiValues.push({ y: 100 - (100 / (1 + rs)) }); }
+            for (let i = period + 1; i < data.length; i++) {
+                const diff = data[i] - data[i - 1]; let currentGain = diff > 0 ? diff : 0; let currentLoss = diff < 0 ? Math.abs(diff) : 0;
+                avgGain = ((avgGain * (period - 1)) + currentGain) / period; avgLoss = ((avgLoss * (period - 1)) + currentLoss) / period;
+                if (avgLoss === 0) { rsiValues.push({ y: 100 }); } else { const rs = avgGain / avgLoss; rsiValues.push({ y: 100 - (100 / (1 + rs)) }); }
+            }
+            return rsiValues;
+        } 
         
-        // La función getCombinedSignals en el frontend ya no se usará
-        // para *determinar* la señal principal, ya que el backend la enviará.
-        // La mantendremos de placeholder o la eliminaremos si no se usa más.
-        function getCombinedSignals(smaShort, smaLong, rsi, bollingerBands, closingPrices) { /* ... lógica ... */ return { sma: 'N/A', rsi: 'N/A', bb: 'N/A', overall: 'hold' }; }
+        // La función getCombinedSignals en el frontend ya no se usará para *determinar* la señal principal, ya que el backend la enviará.
+        function getCombinedSignals(smaShort, smaLong, rsi, bollingerBands, closingPrices) { 
+            let smaRec = 'hold'; let rsiRec = 'hold'; let bbRec = 'hold';
+            const validSmaShort = smaShort ? smaShort.filter(v => v !== null) : [];
+            const validSmaLong = smaLong ? smaLong.filter(v => v !== null) : [];
+            if (validSmaShort.length >= 2 && validSmaLong.length >= 2) { const lastSmaShort = validSmaShort[validSmaShort.length - 1].y; const prevSmaShort = validSmaShort[validSmaShort.length - 2].y; const lastSmaLong = validSmaLong[validSmaLong.length - 1].y; const prevSmaLong = validSmaLong[validSmaLong.length - 2].y; if (prevSmaShort <= prevSmaLong && lastSmaShort > lastSmaLong) smaRec = 'buy'; else if (prevSmaShort >= prevSmaLong && lastSmaLong < lastSmaLong) smaRec = 'sell'; } else { smaRec = 'N/A'; }
+            const validRsi = rsi ? rsi.filter(v => v !== null) : [];
+            if (validRsi.length > 0) { const lastRsi = validRsi[validRsi.length - 1].y; if (lastRsi > RSI_OVERBOUGHT) rsiRec = 'sell'; else if (lastRsi < RSI_OVERSOLD) rsiRec = 'buy'; } else { rsiRec = 'N/A'; }
+            const validBbUpper = (bollingerBands && bollingerBands.upper) ? bollingerBands.upper.filter(v => v !== null) : [];
+            const validBbLower = (bollingerBands && bollingerBands.lower) ? bollingerBands.lower.filter(v => v !== null) : [];
+            const lastPrice = closingPrices ? closingPrices[closingPrices.length - 1] : undefined; 
+            if (validBbUpper.length > 0 && validBbLower.length > 0 && lastPrice !== undefined) { const lastBbUpper = validBbUpper[validBbUpper.length - 1].y; const lastBbLower = validBbLower[validBbLower.length - 1].y; if (lastPrice > lastBbUpper) bbRec = 'sell'; else if (lastPrice < lastBbLower) bbRec = 'buy'; } else { bbRec = 'N/A'; }
+            let buyCount = 0; let sellCount = 0; let naCount = 0;
+            if (smaRec === 'buy') buyCount++; else if (smaRec === 'sell') sellCount++; else naCount++;
+            if (rsiRec === 'buy') buyCount++; else if (rsiRec === 'sell') sellCount++; else naCount++;
+            if (bbRec === 'buy') buyCount++; else if (bbRec === 'sell') sellCount++; else naCount++;
+            let overallRecommendation = 'hold';
+            if ((buyCount + sellCount) >= 2) { if (buyCount >= 2 && sellCount === 0) { overallRecommendation = 'buy'; } else if (sellCount >= 2 && buyCount === 0) { overallRecommendation = 'sell'; } else { overallRecommendation = 'hold'; } } else { overallRecommendation = 'hold'; console.log(`getCombinedSignals: Recomendación forzada a HOLD por datos insuficientes de indicadores individuales.`); }
+            return { sma: smaRec, rsi: rsiRec, bb: bbRec, overall: overallRecommendation };
+        }
 
 
         // ===================================================================================
@@ -581,90 +628,31 @@
                 }
             ];
 
-            if (toggleSmaShort.checked && smaShort && smaShort.length > 0) { // Comprobar si hay datos válidos
-                datasets.push({ 
-                    label: `SMA ${SMA_SHORT_PERIOD}`, 
-                    data: smaShort.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null), 
-                    borderColor: '#ffce56', 
-                    borderWidth: 1.5, 
-                    pointRadius: 0, 
-                    fill: false,
-                    yAxisID: 'y-price' 
-                });
+            if (toggleSmaShort.checked && smaShort && smaShort.length > 0) { 
+                datasets.push({ label: `SMA ${SMA_SHORT_PERIOD}`, data: smaShort.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null), borderColor: '#ffce56', borderWidth: 1.5, pointRadius: 0, fill: false, yAxisID: 'y-price' });
             }
             if (toggleSmaLong.checked && smaLong && smaLong.length > 0) {
-                datasets.push({ 
-                    label: `SMA ${SMA_LONG_PERIOD}`, 
-                    data: smaLong.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null), 
-                    borderColor: '#ff6384', 
-                    borderWidth: 1.5, 
-                    pointRadius: 0, 
-                    fill: false,
-                    yAxisID: 'y-price' 
-                });
+                datasets.push({ label: `SMA ${SMA_LONG_PERIOD}`, data: smaLong.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null), borderColor: '#ff6384', borderWidth: 1.5, pointRadius: 0, fill: false, yAxisID: 'y-price' });
             }
             
             if (toggleBbUpper.checked && bb && bb.upper && bb.upper.length > 0) {
-                datasets.push({ 
-                    label: `BB Superior`, 
-                    data: bb.upper.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null), 
-                    borderColor: 'rgba(153, 102, 255, 0.5)', 
-                    borderWidth: 1, 
-                    pointRadius: 0, 
-                    fill: false,
-                    yAxisID: 'y-price' 
-                });
+                datasets.push({ label: `BB Superior`, data: bb.upper.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null), borderColor: 'rgba(153, 102, 255, 0.5)', borderWidth: 1, pointRadius: 0, fill: false, yAxisID: 'y-price' });
             }
             if (toggleBbLower.checked && bb && bb.lower && bb.lower.length > 0) {
-                datasets.push({ 
-                    label: `BB Inferior`, 
-                    data: bb.lower.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null), 
-                    borderColor: 'rgba(153, 102, 255, 0.5)', 
-                    borderWidth: 1, 
-                    pointRadius: 0, 
-                    fill: '-1',
-                    backgroundColor: 'rgba(153, 102, 255, 0.1)',
-                    hidden: false,
-                    yAxisID: 'y-price' 
-                });
+                datasets.push({ label: `BB Inferior`, data: bb.lower.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null), borderColor: 'rgba(153, 102, 255, 0.5)', borderWidth: 1, pointRadius: 0, fill: '-1', backgroundColor: 'rgba(153, 102, 255, 0.1)', hidden: false, yAxisID: 'y-price' });
             }
             if (toggleBbMiddle.checked && bb && bb.middle && bb.middle.length > 0) {
-                datasets.push({ 
-                    label: `BB Media`, 
-                    data: bb.middle.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null), 
-                    borderColor: 'rgba(153, 102, 255, 0.8)', 
-                    borderWidth: 1.5, 
-                    pointRadius: 0, 
-                    borderDash: [5, 5], 
-                    fill: false,
-                    yAxisID: 'y-price' 
-                });
+                datasets.push({ label: `BB Media`, data: bb.middle.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null), borderColor: 'rgba(153, 102, 255, 0.8)', borderWidth: 1.5, pointRadius: 0, borderDash: [5, 5], fill: false, yAxisID: 'y-price' });
             }
 
             if (toggleRsi.checked && rsi && rsi.length > 0) {
-                datasets.push({
-                    label: `RSI (${RSI_PERIOD})`,
-                    data: rsi.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null),
-                    borderColor: '#4bc0c0', 
-                    borderWidth: 1.5,
-                    pointRadius: 0,
-                    fill: false,
-                    yAxisID: 'y-rsi' 
-                });
+                datasets.push({ label: `RSI (${RSI_PERIOD})`, data: rsi.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null), borderColor: '#4bc0c0', borderWidth: 1.5, pointRadius: 0, fill: false, yAxisID: 'y-rsi' });
             }
 
             const annotations = {};
             if (toggleRsi.checked) {
-                annotations.rsiOverboughtLine = { 
-                    type: 'line', yMin: RSI_OVERBOUGHT, yMax: RSI_OVERBOUGHT, 
-                    borderColor: 'red', borderWidth: 1, borderDash: [5, 5], yAxisID: 'y-rsi', 
-                    label: { content: 'Sobrecompra', enabled: true, position: 'start', color: '#e0e0e0', backgroundColor: 'rgba(255, 0, 0, 0.5)'} 
-                };
-                annotations.rsiOversoldLine = { 
-                    type: 'line', yMin: RSI_OVERSOLD, yMax: RSI_OVERSOLD, 
-                    borderColor: 'green', borderWidth: 1, borderDash: [5, 5], yAxisID: 'y-rsi', 
-                    label: { content: 'Sobreventa', enabled: true, position: 'start', color: '#e0e0e0', backgroundColor: 'rgba(0, 128, 0, 0.5)'} 
-                };
+                annotations.rsiOverboughtLine = { type: 'line', yMin: RSI_OVERBOUGHT, yMax: RSI_OVERBOUGHT, borderColor: 'red', borderWidth: 1, borderDash: [5, 5], yAxisID: 'y-rsi', label: { content: 'Sobrecompra', enabled: true, position: 'start', color: '#e0e0e0', backgroundColor: 'rgba(255, 0, 0, 0.5)'} };
+                annotations.rsiOversoldLine = { type: 'line', yMin: RSI_OVERSOLD, yMax: RSI_OVERSOLD, borderColor: 'green', borderWidth: 1, borderDash: [5, 5], yAxisID: 'y-rsi', label: { content: 'Sobreventa', enabled: true, position: 'start', color: '#e0e0e0', backgroundColor: 'rgba(0, 128, 0, 0.5)'} };
             }
 
             priceChartInstance = new Chart(ctx, {
@@ -687,10 +675,18 @@
         }
         
         // updateSignals ahora solo actualiza los paneles UI con la info recibida del backend
-        function updateSignals(signals) { 
+        function updateSignals(analysisData, closingPrices) { // Recibe analysisData del backend
             smaSignalDiv.classList.remove('alert-buy', 'alert-sell');
             rsiSignalDiv.classList.remove('alert-buy', 'alert-sell');
             bbSignalDiv.classList.remove('alert-buy', 'alert-sell');
+
+            // Usar directamente las señales recibidas del backend
+            const signals = {
+                sma: analysisData.sma,
+                rsi: analysisData.rsi,
+                bb: analysisData.bb,
+                overall: analysisData.overall_rec // overall_rec es la recomendación combinada
+            };
 
             // SMA
             if (signals.sma === 'buy') { smaSignalDiv.textContent = 'Cruce SMA: COMPRA 📈'; smaSignalDiv.className = 'signal buy alert-buy'; }
@@ -786,6 +782,7 @@
         }
 
         async function loadHistoricalRecommendationsFromBackend() {
+            // Limpiar todas las listas del historial
             allHistoryList.innerHTML = '<li>Cargando historial...</li>';
             aciertosList.innerHTML = '<li>Cargando...</li>';
             riesgosList.innerHTML = '<li>Cargando...</li>';
@@ -951,8 +948,8 @@
             renderPriceChart(currentPriceDataCache, currentSmaShortCache, currentSmaLongCache, currentBollingerBandsCache, currentRsiCache);
             
             // Actualizar señales individuales con los datos recibidos del backend
-            const closingPrices = analysisData.klines.map(p => p.y); // Necesario para updateSignals
-            updateSignals(analysisData, closingPrices); // Pasar el objeto analysisData y closingPrices
+            // closingPrices no es estrictamente necesario aquí ya que signals ya contiene todo
+            updateSignals(analysisData, null); // Pasamos null para closingPrices ya que no se usa en updateSignals
             
             startUpdateTimer(UPDATE_INTERVAL_SELECTED_CRYPTO / 1000);
             console.log("Análisis de criptomoneda seleccionada completado (datos de backend).");
@@ -990,11 +987,11 @@
 
             if (allCryptos.length > 0) {
                 runSelectedCryptoAnalysis(); 
-                updateAllCryptosOpportunities(); // Esta función ahora solo recarga el historial
+                updateAllCryptosOpportunities();
                 loadHistoricalRecommendationsFromBackend(); 
 
                 setInterval(runSelectedCryptoAnalysis, UPDATE_INTERVAL_SELECTED_CRYPTO);
-                setInterval(updateAllCryptosOpportunities, UPDATE_INTERVAL_ALL_CRYPTOS); // Podría ser innecesario si la de historia ya hace lo suficiente
+                setInterval(updateAllCryptosOpportunities, UPDATE_INTERVAL_ALL_CRYPTOS); 
                 setInterval(loadHistoricalRecommendationsFromBackend, HISTORY_UPDATE_INTERVAL); 
             } else {
                 console.error("No se encontraron criptomonedas en la lista estática. La aplicación no puede iniciar correctamente.");
