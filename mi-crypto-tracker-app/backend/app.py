@@ -22,13 +22,11 @@ LAST_REC_FILE = 'last_recommendations.csv'
 
 current_analysis_cache = {} 
 
-# --- Lista de Símbolos a Monitorear (DEBE COINCIDIR CON EL FRONTEND, NO HAY CONVERSIÓN AQUÍ) ---
-# Si tu frontend usa BTC-USDT, esta lista debe ser BTC-USDT
 SYMBOLS_TO_MONITOR = [
     "BTC-USDT", "ETH-USDT", "BNB-USDT", "XRP-USDT", "SOL-USDT", "ADA-USDT", 
     "DOGE-USDT", "SHIB-USDT", "DOT-USDT", "LTC-USDT", "LINK-USDT", "MATIC-USDT",
     "TRX-USDT", "AVAX-USDT", "UNI-USDT", "FIL-USDT", "ICP-USDT", "APT-USDT", 
-    "NEAR-USDT", "ATOM-USDT", "ARB-USDT", "OP-USDT", "IMX-USDT", 
+    "SUI-USDT", "NEAR-USDT", "ATOM-USDT", "ARB-USDT", "OP-USDT", "IMX-USDT", 
     "AAVE-USDT", "ALGO-USDT", "FTM-USDT", "VET-USDT", "CHZ-USDT", 
     "GRT-USDT", "EOS-USDT", "SAND-USDT", "MANA-USDT",
     "USDC-USDT", 
@@ -101,18 +99,9 @@ def update_last_recommendation_file(symbol, timestamp_iso, recommendation, sma_r
         writer.writeheader()
         writer.writerows(updated_rows)
 
-# --- FUNCIONES DE OBTENCIÓN DE DATOS (AHORA PARA KUCOIN CON CORRECCIÓN DE SÍMBOLO) ---
+# --- FUNCIONES DE OBTENCIÓN DE DATOS (KUCOIN API) ---
 async def get_kucoin_klines(symbol, interval=KUCOIN_INTERVAL, limit=KUCOIN_LIMIT):
-    # CORRECCIÓN CLAVE: El símbolo ya viene en formato BASE-QUOTE (ej. BTC-USDT) del frontend.
-    # No es necesario hacer un .replace que añadiría otro guion.
     kucoin_symbol = symbol 
-    
-    # Manejo específico para casos como ARB, OP, IMX si el frontend los enviara sin -USDT
-    # (aunque la lista actual del frontend ya los tiene con -USDT, es una salvaguarda)
-    # if symbol == "ARB": kucoin_symbol = "ARB-USDT" 
-    # elif symbol == "OP": kucoin_symbol = "OP-USDT" 
-    # elif symbol == "IMX": kucoin_symbol = "IMX-USDT" 
-
     url = f"https://api.kucoin.com/api/v1/market/candles?symbol={kucoin_symbol}&type={interval}&limit={limit}"
     
     try:
@@ -148,7 +137,7 @@ async def get_kucoin_klines(symbol, interval=KUCOIN_INTERVAL, limit=KUCOIN_LIMIT
         return None
 
 
-# --- FUNCIONES DE CÁLCULO DE INDICADORES (No cambian) ---
+# --- FUNCIONES DE CÁLCULO DE INDICADORES ---
 def calculate_sma(data, period):
     sma = []
     if not data or len(data) < period:
@@ -225,7 +214,7 @@ def calculate_rsi(data, period):
             rsi_values.append({'y': 100 - (100 / (1 + rs))})
     return rsi_values
 
-# --- Lógica de Señales Combinadas (No cambia) ---
+# --- Lógica de Señales Combinadas ---
 def get_combined_signals(sma_short, sma_long, rsi, bollinger_bands, closing_prices):
     sma_rec = 'hold'
     rsi_rec = 'hold'
@@ -409,12 +398,17 @@ async def scheduled_analysis_job(symbols):
 # Endpoint para obtener las recomendaciones (sin cambios en la lógica de obtención)
 @app.route('/get_recommendations', methods=['GET'])
 def get_recommendations():
+    # AÑADIDO: Parámetros de paginación
+    page = request.args.get('page', default=1, type=int)
+    limit = request.args.get('limit', default=20, type=int) # Límite por página (ej. 20 filas)
+
     recommendations = []
     
     current_time_utc = datetime.now(timezone.utc) 
     threshold_time_utc = current_time_utc - timedelta(hours=24) # Usamos 24 horas para el historial que se muestra
 
     try:
+        all_recommendations = [] # Lista temporal para todas las recomendaciones dentro del umbral
         with open(CSV_FILE, mode='r', encoding='utf-8') as file:
             reader = csv.reader(file)
             header = next(reader, None) 
@@ -426,7 +420,7 @@ def get_recommendations():
                         entry_timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00')).replace(tzinfo=timezone.utc)
                         
                         if entry_timestamp >= threshold_time_utc:
-                            recommendations.append({
+                            all_recommendations.append({
                                 'timestamp': timestamp_str,
                                 'symbol': symbol,
                                 'recommendation': recommendation,
@@ -442,37 +436,44 @@ def get_recommendations():
                 else:
                     print(f"Skipping malformed row (wrong length): {row}")
 
-        recommendations.sort(key=lambda x: datetime.fromisoformat(x['timestamp'].replace('Z', '+00:00')).replace(tzinfo=timezone.utc), reverse=True)
+        all_recommendations.sort(key=lambda x: datetime.fromisoformat(x['timestamp'].replace('Z', '+00:00')).replace(tzinfo=timezone.utc), reverse=True)
         
-        return jsonify(recommendations), 200
+        # --- Lógica de Paginación ---
+        start_index = (page - 1) * limit
+        end_index = start_index + limit
+        paginated_recommendations = all_recommendations[start_index:end_index]
+        
+        total_pages = (len(all_recommendations) + limit - 1) // limit # Calcula el número total de páginas
+
+        return jsonify({
+            'recommendations': paginated_recommendations,
+            'total_items': len(all_recommendations),
+            'total_pages': total_pages,
+            'current_page': page
+        }), 200
 
     except FileNotFoundError:
-        return jsonify([]), 200
+        return jsonify({'recommendations': [], 'total_items': 0, 'total_pages': 0, 'current_page': page}), 200
     except Exception as e:
         print(f"Error getting recommendations: {e}")
         return jsonify({'message': f'Internal server error: {str(e)}'}), 500
 
-# NUEVO ENDPOINT: Para que el frontend obtenga las señales actuales y datos de Klines para el gráfico
+# Endpoint para obtener las señales actuales y datos de Klines para el gráfico
 @app.route('/get_latest_analysis/<symbol>', methods=['GET'])
 async def get_latest_analysis(symbol):
     print(f"[{datetime.now().isoformat()}] Frontend requested latest analysis for {symbol}")
     
-    # Buscar en la cache si ya tenemos los datos recientes para este símbolo
     if symbol in current_analysis_cache and current_analysis_cache[symbol].get('klines'):
         print(f"[{datetime.now().isoformat()}] Serving from cache for {symbol}.")
         return jsonify(current_analysis_cache[symbol]), 200
     
-    # Si no está en cache o no hay klines, intentar obtenerlos (esto es síncrono para la ruta, lo ideal es que la cache ya esté llena por el scheduler)
     print(f"[{datetime.now().isoformat()}] Cache miss for {symbol}, trying to fetch live. (This should be rare if scheduler runs)")
     try:
-        # CAMBIADO: Usar get_kucoin_klines
         klines_data = await get_kucoin_klines(symbol) 
         
-        # --- VALIDACIÓN DE DATOS PARA CÁLCULO (Duplicado del scheduler, pero necesario si el cache falla) ---
         min_required_klines = max(20, 50, 14) + 1 
         if not klines_data or len(klines_data) < min_required_klines:
             print(f"[{datetime.now().isoformat()}] Insufficient data for {symbol} on live fetch for frontend. Returning empty.")
-            # Devolver una estructura vacía o con N/A para que el frontend no falle
             return jsonify({
                 'overall_rec': 'hold', 'sma': 'N/A', 'rsi': 'N/A', 'bb': 'N/A',
                 'klines': [], 'sma_short': [], 'sma_long': [], 'bb_bands': {'middle':[],'upper':[],'lower':[]}, 'rsi_data': []
@@ -497,7 +498,6 @@ async def get_latest_analysis(symbol):
             'bb_bands': bollinger_bands,
             'rsi_data': rsi
         }
-        # Actualizar la cache para futuras peticiones
         current_analysis_cache[symbol] = response_data
         
         return jsonify(response_data), 200
@@ -520,7 +520,6 @@ SYMBOLS_TO_MONITOR = [
     "USDC-USDT", 
 ]
 
-# Añadir la tarea programada: Ejecuta 'scheduled_analysis_job' cada 2 minutos
 scheduler.add_job(
     lambda: asyncio.run(scheduled_analysis_job(SYMBOLS_TO_MONITOR)), 
     'interval',
@@ -529,7 +528,6 @@ scheduler.add_job(
     max_instances=1 
 )
 
-# Esto se ejecuta una vez cuando la aplicación Flask se inicia
 if not scheduler.running:
     scheduler.start()
     print("Scheduler started upon module load.")
