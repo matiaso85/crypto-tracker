@@ -330,44 +330,11 @@
         <div id="controls">
             <label for="coin-select">Elige una Criptomoneda:</label>
             <select id="coin-select">
-                <option value="BTC-USDT" selected>Bitcoin (BTC-USDT)</option>
-                <option value="ETH-USDT">Ethereum (ETH-USDT)</option>
-                <option value="BNB-USDT">BNB (BNB-USDT)</option>
-                <option value="XRP-USDT">XRP (XRP-USDT)</option>
-                <option value="SOL-USDT">Solana (SOL-USDT)</option>
-                <option value="ADA-USDT">Cardano (ADA-USDT)</option>
-                <option value="DOGE-USDT">Dogecoin (DOGE-USDT)</option>
-                <option value="SHIB-USDT">Shiba Inu (SHIB-USDT)</option>
-                <option value="DOT-USDT">Polkadot (DOT-USDT)</option>
-                <option value="LTC-USDT">Litecoin (LTC-USDT)</option>
-                <option value="LINK-USDT">Chainlink (LINK-USDT)</option>
-                <option value="MATIC-USDT">Polygon (MATIC-USDT)</option>
-                <option value="TRX-USDT">Tron (TRX-USDT)</option>
-                <option value="AVAX-USDT">Avalanche (AVAX-USDT)</option>
-                <option value="UNI-USDT">Uniswap (UNI-USDT)</option>
-                <option value="FIL-USDT">Filecoin (FIL-USDT)</option>
-                <option value="ICP-USDT">Internet Computer (ICP-USDT)</option>
-                <option value="APT-USDT">Aptos (APT-USDT)</option>
-                <option value="SUI-USDT">Sui (SUI-USDT)</option>
-                <option value="NEAR-USDT">NEAR Protocol (NEAR-USDT)</option>
-                <option value="ATOM-USDT">Cosmos (ATOM-USDT)</option>
-                <option value="ARB-USDT">Arbitrum (ARB-USDT)</option>
-                <option value="OP-USDT">Optimism (OP-USDT)</option>
-                <option value="IMX-USDT">Immutable X (IMX-USDT)</option>
-                <option value="AAVE-USDT">Aave (AAVE-USDT)</option>
-                <option value="ALGO-USDT">Algorand (ALGO-USDT)</option>
-                <option value="FTM-USDT">Fantom (FTM-USDT)</option>
-                <option value="VET-USDT">VeChain (VET-USDT)</option>
-                <option value="CHZ-USDT">Chiliz (CHZ-USDT)</option>
-                <option value="GRT-USDT">The Graph (GRT-USDT)</option>
-                <option value="EOS-USDT">EOS (EOS-USDT)</option>
-                <option value="SAND-USDT">The Sandbox (SAND-USDT)</option>
-                <option value="MANA-USDT">Decentraland (MANA-USDT)</option>
-                <option value="USDC-USDT">USDC (USDC-USDT)</option>
-                </select>
+                <option value="">Cargando criptomonedas...</option> 
+            </select>
             <div id="update-timer"></div>
             <p style="font-size: 0.8em; color: #888; margin-top: 10px;">
-                Selecciona una criptomoneda para ver su análisis detallado (gráficos y señales individuales).
+                La lista de criptomonedas se carga dinámicamente desde KuCoin.
             </p>
         </div>
 
@@ -540,18 +507,48 @@
         // --- INICIALIZACIÓN DE LA APLICACIÓN ---
         // ===================================================================================
 
-        function initStaticCryptoList() {
-            allCryptos = [];
-            const options = coinSelect.options;
-            if (options.length === 0) {
-                console.error("Error: No se encontraron opciones en el selector de criptomonedas. Asegúrate de que el HTML esté cargado correctamente.");
-                return;
+        // CAMBIADO: initStaticCryptoList -> initDynamicCryptoList (ahora hace la llamada al backend)
+        async function initDynamicCryptoList() {
+            console.log("initDynamicCryptoList: Cargando lista de criptomonedas dinámicamente desde el backend.");
+            coinSelect.innerHTML = '<option value="">Cargando monedas...</option>'; // Mostrar estado de carga
+            
+            try {
+                const response = await fetch(`${BACKEND_URL}/get_available_symbols`);
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Error HTTP al obtener símbolos del backend: ${response.status} - ${response.statusText}. Detalles: ${errorText}`);
+                }
+                const symbols = await response.json(); // Se espera una lista de strings (ej. ["BTC-USDT", "ETH-USDT"])
+
+                coinSelect.innerHTML = ''; // Limpiar opciones de carga
+                allCryptos = []; // Limpiar la lista global
+                
+                if (symbols.length === 0) {
+                    coinSelect.innerHTML = '<option value="">No hay monedas disponibles.</option>';
+                    console.warn("initDynamicCryptoList: No se recibieron símbolos del backend.");
+                    return;
+                }
+
+                symbols.forEach(symbol => {
+                    const option = document.createElement('option');
+                    option.value = symbol;
+                    option.textContent = symbol; // El backend ya envía el formato correcto (ej. BTC-USDT)
+                    coinSelect.appendChild(option);
+                    allCryptos.push(symbol);
+                });
+
+                // Seleccionar la primera criptomoneda por defecto
+                if (allCryptos.length > 0) {
+                    coinSelect.value = allCryptos[0];
+                }
+                console.log(`initDynamicCryptoList: Lista de ${allCryptos.length} criptomonedas cargada dinámicamente.`);
+
+            } catch (error) {
+                console.error("initDynamicCryptoList: Error al cargar la lista de criptomonedas:", error);
+                coinSelect.innerHTML = '<option value="">Error al cargar monedas.</option>';
             }
-            for (let i = 0; i < options.length; i++) {
-                allCryptos.push(options[i].value);
-            }
-            console.log("Lista de criptomonedas estática cargada. Total:", allCryptos.length);
         }
+
 
         // ===================================================================================
         // --- FUNCIONES DE OBTENCIÓN DE DATOS DESDE EL BACKEND (AHORA ES LA FUENTE) ---
@@ -974,7 +971,7 @@
             }
             console.log(`runSelectedCryptoAnalysis: Solicitando análisis de ${selectedSymbol} al backend.`);
 
-            const analysisData = await getLatestAnalysisFromBackend(selectedSymbol); // NUEVO: Llamada al backend
+            const analysisData = await getLatestAnalysisFromBackend(selectedSymbol); 
             
             if (!analysisData || !analysisData.klines || analysisData.klines.length === 0) {
                 console.error(`runSelectedCryptoAnalysis: No se recibieron datos de análisis para ${selectedSymbol} del backend.`);
@@ -983,6 +980,13 @@
                 bbSignalDiv.textContent = 'Error: No hay datos.';
                 updateTimerDiv.textContent = "Datos no disponibles del backend";
                 
+                // Aseguramos que los caches sean nulls/vacíos si no hay datos
+                currentPriceDataCache = null; 
+                currentSmaShortCache = null;
+                currentSmaLongCache = null;
+                currentBollingerBandsCache = null;
+                currentRsiCache = null;
+
                 if (priceChartInstance) priceChartInstance.destroy();
                 priceChartCanvas.style.display = 'none';
                 priceNoDataMessage.textContent = "Datos no disponibles para gráficos."
@@ -990,7 +994,6 @@
                 return;
             }
 
-            // Poblamos los caches con los datos recibidos del backend
             currentPriceDataCache = analysisData.klines; 
             currentSmaShortCache = analysisData.sma_short;
             currentSmaLongCache = analysisData.sma_long;
@@ -1007,14 +1010,15 @@
             console.log("Análisis de criptomoneda seleccionada completado (datos de backend).");
         }
 
-        // updateAllCryptosOpportunities ahora también obtendrá datos del backend
+        // updateAllCryptosOpportunities ahora obtendrá las últimas oportunidades del historial
         async function updateAllCryptosOpportunities() {
-            console.log("Inicio de updateAllCryptosOpportunities (obteniendo de backend).");
-            // Para esta versión, esta función se encargará de recargar el historial (que muestra las últimas oportunidades).
-            // La lógica de cálculo y guardado la hace el scheduler del backend.
-            loadHistoricalRecommendationsFromBackend();
+            console.log("Inicio de updateAllCryptosOpportunities (recargando historial).");
+            // Aquí, en lugar de un bucle complejo, simplemente recargamos la primera página del historial.
+            // La paginación maneja el resto.
+            currentPage = 1; // Volver a la primera página para el tablero de oportunidades
+            loadHistoricalRecommendationsFromBackend(); 
             
-            console.log("updateAllCryptosOpportunities: Recargando el historial para mostrar las últimas oportunidades.");
+            console.log("updateAllCryptosOpportunities: Se ha recargado la primera página del historial.");
         }
 
 
@@ -1024,13 +1028,15 @@
 
         document.addEventListener('DOMContentLoaded', async () => {
             console.log("DOM Cargado. Iniciando aplicación.");
-            initStaticCryptoList(); 
+            // 1. Cargar la lista dinámica de criptos desde el backend
+            await initDynamicCryptoList(); 
 
             if (allCryptos.length > 0) {
+                // 2. Ejecución inicial y configuración de intervalos
                 runSelectedCryptoAnalysis(); 
-                updateAllCryptosOpportunities();
-                loadHistoricalRecommendationsFromBackend(); 
-
+                updateAllCryptosOpportunities(); // Carga las oportunidades (que es la primera página del historial)
+                //loadHistoricalRecommendationsFromBackend(); // Esta ya la llama updateAllCryptosOpportunities
+                
                 setInterval(runSelectedCryptoAnalysis, UPDATE_INTERVAL_SELECTED_CRYPTO);
                 setInterval(updateAllCryptosOpportunities, UPDATE_INTERVAL_ALL_CRYPTOS); 
                 setInterval(loadHistoricalRecommendationsFromBackend, HISTORY_UPDATE_INTERVAL); 
