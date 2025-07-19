@@ -22,17 +22,8 @@ LAST_REC_FILE = 'last_recommendations.csv'
 
 current_analysis_cache = {} 
 
-# --- Lista de Símbolos a Monitorear (DEBE COINCIDIR CON EL FRONTEND) ---
-SYMBOLS_TO_MONITOR = [
-    "BTC-USDT", "ETH-USDT", "BNB-USDT", "XRP-USDT", "SOL-USDT", "ADA-USDT", 
-    "DOGE-USDT", "SHIB-USDT", "DOT-USDT", "LTC-USDT", "LINK-USDT", "MATIC-USDT",
-    "TRX-USDT", "AVAX-USDT", "UNI-USDT", "FIL-USDT", "ICP-USDT", "APT-USDT", 
-    "SUI-USDT", "NEAR-USDT", "ATOM-USDT", "ARB-USDT", "OP-USDT", "IMX-USDT", 
-    "AAVE-USDT", "ALGO-USDT", "FTM-USDT", "VET-USDT", "CHZ-USDT", 
-    "GRT-USDT", "EOS-USDT", "SAND-USDT", "MANA-USDT",
-    "USDC-USDT", 
-]
-
+# La lista SYMBOLS_TO_MONITOR ahora se poblará dinámicamente
+SYMBOLS_TO_MONITOR = [] 
 
 # --- FUNCIONES DE UTILIDAD CSV ---
 def ensure_csv_exists():
@@ -100,11 +91,49 @@ def update_last_recommendation_file(symbol, timestamp_iso, recommendation, sma_r
         writer.writeheader()
         writer.writerows(updated_rows)
 
-# --- FUNCIONES DE OBTENCIÓN DE DATOS (KUCOIN API) ---
+# --- NUEVA FUNCIÓN: Obtener TODOS los símbolos de KuCoin ---
+async def get_all_kucoin_symbols():
+    # Endpoint para obtener todos los símbolos de mercado
+    url = "https://api.kucoin.com/api/v1/symbols"
+    print(f"[{datetime.now().isoformat()}] Fetching all symbols from KuCoin API: {url}")
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, timeout=15.0) 
+            response.raise_for_status() 
+            data = response.json()
+            
+            if not data or not data.get('data') or not isinstance(data['data'], list):
+                raise ValueError("API de KuCoin para símbolos devolvió respuesta inválida o sin datos.")
+            
+            # Filtrar por pares USDT y USD, y que estén online
+            filtered_symbols = []
+            for item in data['data']:
+                if item.get('enableTrading') and item.get('baseCurrency') and item.get('quoteCurrency'):
+                    # Preferimos USDT como moneda base para el par
+                    if item['quoteCurrency'] == 'USDT' or item['quoteCurrency'] == 'USDC': # Añadido USDC
+                        # El formato de símbolo de KuCoin es BASE-QUOTE (ej. BTC-USDT)
+                        filtered_symbols.append(f"{item['baseCurrency']}-{item['quoteCurrency']}")
+            
+            # Eliminar duplicados y ordenar alfabéticamente
+            filtered_symbols = sorted(list(set(filtered_symbols)))
+            print(f"[{datetime.now().isoformat()}] Fetched {len(filtered_symbols)} symbols from KuCoin.")
+            return filtered_symbols
+
+    except httpx.HTTPStatusError as e:
+        print(f"Error HTTP al obtener símbolos de KuCoin: {e.response.status_code} - {e.response.text}")
+        return []
+    except httpx.RequestError as e:
+        print(f"Error de red al obtener símbolos de KuCoin: {e}")
+        return []
+    except Exception as e:
+        print(f"Error inesperado al obtener símbolos de KuCoin: {e}")
+        return []
+
+
+# --- FUNCIONES DE OBTENCIÓN DE DATOS (KUCOIN API para Klines) ---
 async def get_kucoin_klines(symbol, interval=KUCOIN_INTERVAL, limit=KUCOIN_LIMIT):
     # El símbolo ya viene en formato BASE-QUOTE (ej. BTC-USDT) del frontend.
     kucoin_symbol = symbol 
-    
     url = f"https://api.kucoin.com/api/v1/market/candles?symbol={kucoin_symbol}&type={interval}&limit={limit}"
     
     try:
@@ -320,6 +349,19 @@ async def scheduled_analysis_job(symbols):
                 current_overall_rec = combined_signals['overall']
                 individual_recs = {'sma': combined_signals['sma'], 'rsi': combined_signals['rsi'], 'bb': combined_signals['bb']}
             
+            # Actualizar la cache con los resultados completos para este símbolo
+            current_analysis_cache[symbol] = {
+                'overall_rec': current_overall_rec,
+                'sma': individual_recs['sma'],
+                'rsi': individual_recs['rsi'],
+                'bb': individual_recs['bb'],
+                'klines': klines_data, # Guarda los klines para el gráfico
+                'sma_short': sma_short,
+                'sma_long': sma_long,
+                'bb_bands': bollinger_bands,
+                'rsi_data': rsi
+            }
+
             # Decidir si guardar la recomendación (lógica de 1 hora / 3% de cambio)
             last_rec_info = get_last_recommendation_from_file(symbol)
             
@@ -398,20 +440,18 @@ async def scheduled_analysis_job(symbols):
 
 # --- RUTAS DE LA API ---
 
-# Endpoint para obtener las recomendaciones (sin cambios en la lógica de obtención)
+# Endpoint para obtener las recomendaciones (con paginación)
 @app.route('/get_recommendations', methods=['GET'])
 def get_recommendations():
-    # AÑADIDO: Parámetros de paginación
     page = request.args.get('page', default=1, type=int)
-    limit = request.args.get('limit', default=20, type=int) # Límite por página (ej. 20 filas)
+    limit = request.args.get('limit', default=20, type=int) 
 
     recommendations = []
-    
     current_time_utc = datetime.now(timezone.utc) 
-    threshold_time_utc = current_time_utc - timedelta(hours=24) # Usamos 24 horas para el historial que se muestra
+    threshold_time_utc = current_time_utc - timedelta(hours=24) 
 
     try:
-        all_recommendations = [] # Lista temporal para todas las recomendaciones dentro del umbral
+        all_recommendations = [] 
         with open(CSV_FILE, mode='r', encoding='utf-8') as file:
             reader = csv.reader(file)
             header = next(reader, None) 
@@ -441,12 +481,11 @@ def get_recommendations():
 
         all_recommendations.sort(key=lambda x: datetime.fromisoformat(x['timestamp'].replace('Z', '+00:00')).replace(tzinfo=timezone.utc), reverse=True)
         
-        # --- Lógica de Paginación ---
         start_index = (page - 1) * limit
         end_index = start_index + limit
         paginated_recommendations = all_recommendations[start_index:end_index]
         
-        total_pages = (len(all_recommendations) + limit - 1) // limit # Calcula el número total de páginas
+        total_pages = (len(all_recommendations) + limit - 1) // limit 
 
         return jsonify({
             'recommendations': paginated_recommendations,
