@@ -24,10 +24,7 @@ current_analysis_cache = {}
 
 SYMBOLS_TO_MONITOR = [] 
 
-# ===================================================================================
-# --- FUNCIONES DE UTILIDAD Y OBTENCIÓN DE DATOS (DEBEN ESTAR AL PRINCIPIO) ---
-# ===================================================================================
-
+# --- FUNCIONES DE UTILIDAD CSV ---
 def ensure_csv_exists():
     if not os.path.exists(CSV_FILE):
         with open(CSV_FILE, mode='w', newline='', encoding='utf-8') as file:
@@ -41,6 +38,7 @@ def ensure_csv_exists():
 
 ensure_csv_exists()
 
+# Función para obtener la última recomendación guardada de last_recommendations.csv
 def get_last_recommendation_from_file(symbol):
     if not os.path.exists(LAST_REC_FILE):
         return None
@@ -51,6 +49,7 @@ def get_last_recommendation_from_file(symbol):
                 return row
     return None
 
+# Función para actualizar la última recomendación en last_recommendations.csv
 def update_last_recommendation_file(symbol, timestamp_iso, recommendation, sma_rec, rsi_rec, bb_rec, current_price):
     rows = []
     found = False
@@ -93,7 +92,8 @@ def update_last_recommendation_file(symbol, timestamp_iso, recommendation, sma_r
 
 # --- NUEVA FUNCIÓN: Obtener TODOS los símbolos de KuCoin ---
 async def get_all_kucoin_symbols():
-    url = "https://api.kucoin.com/api/v1/symbols" #
+    # CORREGIDO: Endpoint para obtener todos los símbolos de mercado
+    url = "https://api.kucoin.com/api/v1/symbols" 
     print(f"[{datetime.now().isoformat()}] Fetching all symbols from KuCoin API: {url}")
     try:
         async with httpx.AsyncClient() as client:
@@ -101,11 +101,12 @@ async def get_all_kucoin_symbols():
             response.raise_for_status() 
             data = response.json()
             
+            # La respuesta de este endpoint es {'code': '200000', 'data': [...]}
             if not data or not data.get('data') or not isinstance(data['data'], list):
                 raise ValueError("API de KuCoin para símbolos devolvió respuesta inválida o sin datos.")
             
             filtered_symbols = []
-            for item in data['data']:
+            for item in data['data']: # Iterar directamente sobre la lista de símbolos
                 if item.get('enableTrading') and item.get('baseCurrency') and item.get('quoteCurrency'):
                     if item['quoteCurrency'] == 'USDT' or item['quoteCurrency'] == 'USDC':
                         filtered_symbols.append(f"{item['baseCurrency']}-{item['quoteCurrency']}")
