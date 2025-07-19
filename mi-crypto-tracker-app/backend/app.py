@@ -91,9 +91,9 @@ def update_last_recommendation_file(symbol, timestamp_iso, recommendation, sma_r
         writer.writeheader()
         writer.writerows(updated_rows)
 
-# --- FUNCIONES DE OBTENCIÓN DE DATOS DE API EXTERNA (KUCOIN) ---
+# --- NUEVA FUNCIÓN: Obtener TODOS los símbolos de KuCoin ---
 async def get_all_kucoin_symbols():
-    url = "https://api.kucoin.com/api/v1/symbols"
+    url = "https://api.kucoin.com/api/v1/market/symbols" # Corregido a market/symbols
     print(f"[{datetime.now().isoformat()}] Fetching all symbols from KuCoin API: {url}")
     try:
         async with httpx.AsyncClient() as client:
@@ -128,6 +128,8 @@ async def get_all_kucoin_symbols():
         print(f"Error inesperado al obtener símbolos de KuCoin: {e}")
         return []
 
+
+# --- FUNCIONES DE OBTENCIÓN DE DATOS (KUCOIN API para Klines) ---
 async def get_kucoin_klines(symbol, interval=KUCOIN_INTERVAL, limit=KUCOIN_LIMIT):
     kucoin_symbol = symbol 
     url = f"https://api.kucoin.com/api/v1/market/candles?symbol={kucoin_symbol}&type={interval}&limit={limit}"
@@ -165,7 +167,7 @@ async def get_kucoin_klines(symbol, interval=KUCOIN_INTERVAL, limit=KUCOIN_LIMIT
         return None
 
 
-# --- FUNCIONES DE CÁLCULO DE INDICADORES ---
+# --- FUNCIONES DE CÁLCULO DE INDICADORES (No cambian) ---
 def calculate_sma(data, period):
     sma = []
     if not data or len(data) < period:
