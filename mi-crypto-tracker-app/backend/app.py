@@ -22,8 +22,17 @@ LAST_REC_FILE = 'last_recommendations.csv'
 
 current_analysis_cache = {} 
 
-# La lista SYMBOLS_TO_MONITOR se poblará dinámicamente al inicio
-SYMBOLS_TO_MONITOR = [] 
+# --- Lista de Símbolos a Monitorear (REDUCIDA PARA PRUEBAS DE FIABILIDAD CON KUCOIN) ---
+# Si esto funciona, puedes ir añadiendo más símbolos uno a uno.
+SYMBOLS_TO_MONITOR = [
+    "BTC-USDT", 
+    "ETH-USDT", 
+    "XRP-USDT", 
+    "SOL-USDT", 
+    "ADA-USDT",
+    "USDC-USDT", # Stablecoin
+]
+
 
 # --- FUNCIONES DE UTILIDAD CSV ---
 def ensure_csv_exists():
@@ -91,49 +100,8 @@ def update_last_recommendation_file(symbol, timestamp_iso, recommendation, sma_r
         writer.writeheader()
         writer.writerows(updated_rows)
 
-# --- NUEVA FUNCIÓN: Obtener TODOS los símbolos de KuCoin ---
-async def get_all_kucoin_symbols():
-    # Endpoint para obtener todos los símbolos de mercado
-    url = "https://api.kucoin.com/api/v1/symbols"
-    print(f"[{datetime.now().isoformat()}] Fetching all symbols from KuCoin API: {url}")
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(url, timeout=15.0) 
-            response.raise_for_status() 
-            data = response.json()
-            
-            if not data or not data.get('data') or not isinstance(data['data'], list):
-                raise ValueError("API de KuCoin para símbolos devolvió respuesta inválida o sin datos.")
-            
-            filtered_symbols = []
-            for item in data['data']:
-                if item.get('enableTrading') and item.get('baseCurrency') and item.get('quoteCurrency'):
-                    # Filtramos por pares USDT o USDC como moneda base para el par
-                    if item['quoteCurrency'] == 'USDT' or item['quoteCurrency'] == 'USDC':
-                        # El formato de símbolo de KuCoin es BASE-QUOTE (ej. BTC-USDT)
-                        filtered_symbols.append(f"{item['baseCurrency']}-{item['quoteCurrency']}")
-            
-            filtered_symbols = sorted(list(set(filtered_symbols)))
-            print(f"[{datetime.now().isoformat()}] Fetched {len(filtered_symbols)} symbols from KuCoin.")
-            return filtered_symbols
-
-    except httpx.HTTPStatusError as e:
-        print(f"Error HTTP al obtener símbolos de KuCoin: {e.response.status_code} - {e.response.text}")
-        return []
-    except httpx.RequestError as e:
-        print(f"Error de red al obtener símbolos de KuCoin: {e}")
-        return []
-    except ValueError as e:
-        print(f"Error de datos de KuCoin para símbolos: {e}")
-        return []
-    except Exception as e:
-        print(f"Error inesperado al obtener símbolos de KuCoin: {e}")
-        return []
-
-
-# --- FUNCIONES DE OBTENCIÓN DE DATOS (KUCOIN API para Klines) ---
+# --- FUNCIONES DE OBTENCIÓN DE DATOS (KUCOIN API) ---
 async def get_kucoin_klines(symbol, interval=KUCOIN_INTERVAL, limit=KUCOIN_LIMIT):
-    # El símbolo ya viene en formato BASE-QUOTE (ej. BTC-USDT) del frontend.
     kucoin_symbol = symbol 
     url = f"https://api.kucoin.com/api/v1/market/candles?symbol={kucoin_symbol}&type={interval}&limit={limit}"
     
@@ -421,7 +389,7 @@ async def scheduled_analysis_job(symbols):
                 with open(CSV_FILE, mode='a', newline='', encoding='utf-8') as file:
                     writer = csv.writer(file)
                     writer.writerow([
-                        now_dt.isoformat().replace('+00:00', 'Z'), 
+                        now_dt.isoformat().replace('+00:00', 'Z'), # Formato ISO para JS
                         symbol,
                         current_overall_rec,
                         last_prev_rec,
@@ -500,7 +468,7 @@ def get_recommendations():
         print(f"Error getting recommendations: {e}")
         return jsonify({'message': f'Internal server error: {str(e)}'}), 500
 
-# NUEVO ENDPOINT: Para que el frontend obtenga la lista de símbolos disponibles dinámicamente
+# Endpoint para obtener la lista de símbolos disponibles dinámicamente
 @app.route('/get_available_symbols', methods=['GET'])
 async def get_available_symbols():
     try:
