@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify
-from flask_cors import CORS # Importa CORS
+from flask_cors import CORS
 import csv
 import os
 from datetime import datetime, timedelta, timezone
@@ -8,7 +8,7 @@ import asyncio
 import httpx 
 
 app = Flask(__name__)
-# CORS(app) # Eliminamos la inicialización global aquí para hacerlo más específico abajo
+CORS(app) 
 
 # --- CONFIGURACIÓN BACKEND ---
 KUCOIN_INTERVAL = "1hour" 
@@ -24,7 +24,10 @@ current_analysis_cache = {}
 
 SYMBOLS_TO_MONITOR = [] 
 
-# --- FUNCIONES DE UTILIDAD CSV ---
+# ===================================================================================
+# --- FUNCIONES DE UTILIDAD Y OBTENCIÓN DE DATOS (DEBEN ESTAR AL PRINCIPIO) ---
+# ===================================================================================
+
 def ensure_csv_exists():
     if not os.path.exists(CSV_FILE):
         with open(CSV_FILE, mode='w', newline='', encoding='utf-8') as file:
@@ -38,7 +41,6 @@ def ensure_csv_exists():
 
 ensure_csv_exists()
 
-# Función para obtener la última recomendación guardada de last_recommendations.csv
 def get_last_recommendation_from_file(symbol):
     if not os.path.exists(LAST_REC_FILE):
         return None
@@ -49,7 +51,6 @@ def get_last_recommendation_from_file(symbol):
                 return row
     return None
 
-# Función para actualizar la última recomendación en last_recommendations.csv
 def update_last_recommendation_file(symbol, timestamp_iso, recommendation, sma_rec, rsi_rec, bb_rec, current_price):
     rows = []
     found = False
@@ -90,7 +91,7 @@ def update_last_recommendation_file(symbol, timestamp_iso, recommendation, sma_r
         writer.writeheader()
         writer.writerows(updated_rows)
 
-# --- NUEVA FUNCIÓN: Obtener TODOS los símbolos de KuCoin ---
+# --- FUNCIONES DE OBTENCIÓN DE DATOS DE API EXTERNA (KUCOIN) ---
 async def get_all_kucoin_symbols():
     url = "https://api.kucoin.com/api/v1/symbols"
     print(f"[{datetime.now().isoformat()}] Fetching all symbols from KuCoin API: {url}")
@@ -127,8 +128,6 @@ async def get_all_kucoin_symbols():
         print(f"Error inesperado al obtener símbolos de KuCoin: {e}")
         return []
 
-
-# --- FUNCIONES DE OBTENCIÓN DE DATOS (KUCOIN API para Klines) ---
 async def get_kucoin_klines(symbol, interval=KUCOIN_INTERVAL, limit=KUCOIN_LIMIT):
     kucoin_symbol = symbol 
     url = f"https://api.kucoin.com/api/v1/market/candles?symbol={kucoin_symbol}&type={interval}&limit={limit}"
@@ -166,7 +165,7 @@ async def get_kucoin_klines(symbol, interval=KUCOIN_INTERVAL, limit=KUCOIN_LIMIT
         return None
 
 
-# --- FUNCIONES DE CÁLCULO DE INDICADORES (No cambian) ---
+# --- FUNCIONES DE CÁLCULO DE INDICADORES ---
 def calculate_sma(data, period):
     sma = []
     if not data or len(data) < period:
@@ -417,7 +416,7 @@ async def scheduled_analysis_job(symbols):
                 with open(CSV_FILE, mode='a', newline='', encoding='utf-8') as file:
                     writer = csv.writer(file)
                     writer.writerow([
-                        now_dt.isoformat().replace('+00:00', 'Z'), 
+                        now_dt.isoformat().replace('+00:00', 'Z'), # Formato ISO para JS
                         symbol,
                         current_overall_rec,
                         last_prev_rec,
@@ -446,7 +445,7 @@ def get_recommendations():
 
     recommendations = []
     current_time_utc = datetime.now(timezone.utc) 
-    threshold_time_utc = current_time_utc - timedelta(hours=24) 
+    threshold_time_utc = current_time_utc - timedelta(hours=24) # Usamos 24 horas para el historial que se muestra
 
     try:
         all_recommendations = [] 
