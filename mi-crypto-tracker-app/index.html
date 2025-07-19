@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Crypto Tracker Online (Bybit + Backend)</title>
+    <title>Crypto Tracker Online (Backend Driven)</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -284,13 +284,47 @@
         .metric-riesgo { color: #dc3545; font-weight: bold; } /* Rojo para riesgo */
         .metric-na { color: #6c757d; } /* Gris para N/A */
         .metric-value { margin-left: 5px; font-size: 0.9em; font-weight: bold;} /* Porcentaje */
+
+        /* Paginación */
+        .pagination-controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #1e1e1e;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .pagination-controls button {
+            background-color: #333;
+            color: #e0e0e0;
+            border: 1px solid #444;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: background-color 0.2s;
+        }
+        .pagination-controls button:hover:not(:disabled) {
+            background-color: #555;
+        }
+        .pagination-controls button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .pagination-controls span {
+            font-size: 1em;
+            color: #e0e0e0;
+        }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@1.0.2"></script>
 </head>
 <body>
-    <h1>Crypto Tracker Online (Bybit + Backend)</h1>
+    <h1>Crypto Tracker Online (Backend Driven)</h1>
 
     <div class="top-section-container">
         <div id="controls">
@@ -425,6 +459,11 @@
                 </ul>
             </div>
         </div>
+        <div class="pagination-controls">
+            <button id="prev-page-btn" disabled>Anterior</button>
+            <span id="page-info">Página 1 de 1</span>
+            <button id="next-page-btn" disabled>Siguiente</button>
+        </div>
         <p style="font-size: 0.8em; color: #888; margin-top: 10px; text-align: center;">
             Este historial se guarda y recupera desde el servidor backend (archivo data.csv).
         </p>
@@ -435,11 +474,11 @@
         // --- CONFIGURACIÓN E INICIALIZACIÓN ---
         // ===================================================================================
 
-        // URL BASE DE TU BACKEND (¡IMPORTANTE: Cambiar esto cuando lo publiques!)
+        // URL BASE DE TU BACKEND 
         const BACKEND_URL = 'https://crypto-tracker-ukyl.onrender.com'; 
 
-        // Parámetros de la API de KuCoin (ahora manejados principalmente por el backend)
-        const KUCOIN_INTERVAL = "1hour"; // Corregido el nombre a KUCOIN
+        // Parámetros de la API de KuCoin (manejados por el backend)
+        const KUCOIN_INTERVAL = "1hour"; 
         const KUCOIN_LIMIT = 200; 
 
         // Intervalos de actualización para el frontend
@@ -478,6 +517,15 @@
         const allHistoryList = document.getElementById('all-history-list');
         const aciertosList = document.getElementById('aciertos-list');
         const riesgosList = document.getElementById('riesgos-list');
+
+        // Paginación del historial
+        const ROWS_PER_PAGE = 20; // Máximo de filas por página
+        let currentPage = 1;
+        let totalPages = 1;
+        const prevPageBtn = document.getElementById('prev-page-btn');
+        const nextPageBtn = document.getElementById('next-page-btn');
+        const pageInfoSpan = document.getElementById('page-info');
+
 
         let priceChartInstance, countdownInterval;
         let allCryptos = []; 
@@ -533,11 +581,6 @@
 
         // ===================================================================================
         // --- FUNCIONES DE CÁLCULO DE INDICADORES (AHORA SOLO PARA RENDERIZADO EN FRONT) ---
-        // Estas funciones son las mismas que antes, pero solo se usan con los datos que ya
-        // vienen procesados del backend si el frontend decide re-calcular algo para el gráfico.
-        // En esta arquitectura, el backend ya hace los cálculos principales.
-        // Las mantenemos aquí para que Chart.js las use internamente al mapear datasets
-        // o si quisieras alguna lógica específica en el futuro.
         // ===================================================================================
         function calculateSMA(data, period) { 
             let sma = [];
@@ -559,7 +602,7 @@
                     const slice = data.slice(i - period + 1, i + 1);
                     const mean = slice.reduce((acc, val) => acc + val, 0) / period;
                     const stdDev = Math.sqrt(slice.reduce((acc, val) => acc + Math.pow(val - mean, 2), 0) / period);
-                    middle.push({ y: mean }); upper.push({ y: mean + (stdDev * stdDevMultiplier) }); lower.push({ y: mean - (stdDev * stdDevMultiplier) });
+                    middle.push({ y: mean }); upper.push({ y: mean + (stdDev * std_dev_multiplier) }); lower.push({ y: mean - (std_dev * std_dev_multiplier) });
                 }
             }
             return { middle, upper, lower };
@@ -580,7 +623,7 @@
             return rsiValues;
         } 
         
-        // La función getCombinedSignals en el frontend ya no se usará para *determinar* la señal principal, ya que el backend la enviará.
+        // getCombinedSignals en el frontend ya no se usa para *determinar* la señal principal
         function getCombinedSignals(smaShort, smaLong, rsi, bollingerBands, closingPrices) { 
             let smaRec = 'hold'; let rsiRec = 'hold'; let bbRec = 'hold';
             const validSmaShort = smaShort ? smaShort.filter(v => v !== null) : [];
@@ -709,7 +752,11 @@
             console.log("Señales individuales actualizadas con datos del backend.");
         }
         
-        // renderOpportunityColumns ya está bien para mostrar las 3 columnas
+        /**
+         * Función central para renderizar las 3 columnas de oportunidades en el DOM.
+         * Se llama repetidamente durante la carga progresiva.
+         * @param {object} recommendationsMap - Un objeto con arrays de símbolos para 'buy', 'sell', 'hold', 'error'.
+         */
         function renderOpportunityColumns(recommendationsMap) {
             buyList.innerHTML = '';
             sellList.innerHTML = '';
@@ -787,15 +834,22 @@
             aciertosList.innerHTML = '<li>Cargando...</li>';
             riesgosList.innerHTML = '<li>Cargando...</li>';
 
-            console.log("Cargando historial desde backend:", `${BACKEND_URL}/get_recommendations`);
+            console.log("Cargando historial desde backend:", `${BACKEND_URL}/get_recommendations?page=${currentPage}&limit=${ROWS_PER_PAGE}`); // Enviar parámetros de paginación
             try {
-                const response = await fetch(`${BACKEND_URL}/get_recommendations`);
+                const response = await fetch(`${BACKEND_URL}/get_recommendations?page=${currentPage}&limit=${ROWS_PER_PAGE}`);
                 if (!response.ok) {
                     const errorText = await response.text();
                     throw new Error(`Error HTTP al cargar historial desde backend: ${response.status} - ${response.statusText}. Detalles: ${errorText}`);
                 }
-                const history = await response.json();
+                const data = await response.json(); // Ahora el backend devuelve un objeto con 'recommendations', 'total_pages', etc.
+                const history = data.recommendations;
+                totalPages = data.total_pages;
+                pageInfoSpan.textContent = `Página ${data.current_page} de ${totalPages}`;
+                prevPageBtn.disabled = (data.current_page === 1);
+                nextPageBtn.disabled = (data.current_page === totalPages);
 
+
+                // Limpiar después de cargar (si hay datos) o mantener el "Cargando..." si falla el fetch.
                 allHistoryList.innerHTML = '';
                 aciertosList.innerHTML = '';
                 riesgosList.innerHTML = '';
@@ -948,7 +1002,7 @@
             renderPriceChart(currentPriceDataCache, currentSmaShortCache, currentSmaLongCache, currentBollingerBandsCache, currentRsiCache);
             
             // Actualizar señales individuales con los datos recibidos del backend
-            // closingPrices no es estrictamente necesario aquí ya que signals ya contiene todo
+            // analysisData ya contiene overall_rec, sma, rsi, bb
             updateSignals(analysisData, null); // Pasamos null para closingPrices ya que no se usa en updateSignals
             
             startUpdateTimer(UPDATE_INTERVAL_SELECTED_CRYPTO / 1000);
@@ -958,18 +1012,9 @@
         // updateAllCryptosOpportunities ahora también obtendrá datos del backend
         async function updateAllCryptosOpportunities() {
             console.log("Inicio de updateAllCryptosOpportunities (obteniendo de backend).");
-            // Esta función podría ser modificada para llamar a un endpoint del backend que devuelva
-            // las últimas recomendaciones para todas las cryptos en un solo request,
-            // pero por ahora, mantendremos la carga progresiva leyendo del historial.
-            // Para mostrar las últimas oportunidades, el backend debe calcularlas y guardarlas.
-            
             // Para esta versión, como el backend ya está guardando, simplemente recargamos el historial
             // que es donde están las últimas oportunidades.
             loadHistoricalRecommendationsFromBackend();
-            
-            // No necesitamos la lógica compleja de looping y delays aquí,
-            // ya que el backend es quien genera las oportunidades en segundo plano.
-            // La "carga progresiva" la veremos en el historial mismo cuando se actualice.
             
             console.log("updateAllCryptosOpportunities: Recargando el historial para mostrar las últimas oportunidades.");
         }
@@ -977,8 +1022,6 @@
 
         // ===================================================================================
         // --- CÓDIGO DE INICIO Y EVENT LISTENERS ---
-        // Este bloque DEBE estar al final del script para asegurar que todas las funciones
-        // llamadas (`initStaticCryptoList`, `runSelectedCryptoAnalysis`, etc.) estén ya definidas.
         // ===================================================================================
 
         document.addEventListener('DOMContentLoaded', async () => {
@@ -1012,6 +1055,21 @@
                     console.warn("No hay datos en caché para redibujar el gráfico con los indicadores.");
                 }
             });
+        });
+
+        // Paginación del historial - Event Listeners
+        prevPageBtn.addEventListener('click', () => {
+            if (currentPage > 1) {
+                currentPage--;
+                loadHistoricalRecommendationsFromBackend();
+            }
+        });
+
+        nextPageBtn.addEventListener('click', () => {
+            if (currentPage < totalPages) {
+                currentPage++;
+                loadHistoricalRecommendationsFromBackend();
+            }
         });
 
     </script>
