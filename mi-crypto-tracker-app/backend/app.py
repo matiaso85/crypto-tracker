@@ -93,7 +93,7 @@ def update_last_recommendation_file(symbol, timestamp_iso, recommendation, sma_r
 
 # --- NUEVA FUNCIÓN: Obtener TODOS los símbolos de KuCoin ---
 async def get_all_kucoin_symbols():
-    url = "https://api.kucoin.com/api/v1/market/symbols" # Corregido a market/symbols
+    url = "https://api.kucoin.com/api/v1/symbols" #
     print(f"[{datetime.now().isoformat()}] Fetching all symbols from KuCoin API: {url}")
     try:
         async with httpx.AsyncClient() as client:
