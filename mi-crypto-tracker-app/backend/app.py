@@ -22,17 +22,7 @@ LAST_REC_FILE = 'last_recommendations.csv'
 
 current_analysis_cache = {} 
 
-# --- Lista de Símbolos a Monitorear (REDUCIDA PARA PRUEBAS DE FIABILIDAD CON KUCOIN) ---
-# Si esto funciona, puedes ir añadiendo más símbolos uno a uno.
-SYMBOLS_TO_MONITOR = [
-    "BTC-USDT", 
-    "ETH-USDT", 
-    "XRP-USDT", 
-    "SOL-USDT", 
-    "ADA-USDT",
-    "USDC-USDT", # Stablecoin
-]
-
+SYMBOLS_TO_MONITOR = [] 
 
 # --- FUNCIONES DE UTILIDAD CSV ---
 def ensure_csv_exists():
@@ -100,7 +90,46 @@ def update_last_recommendation_file(symbol, timestamp_iso, recommendation, sma_r
         writer.writeheader()
         writer.writerows(updated_rows)
 
-# --- FUNCIONES DE OBTENCIÓN DE DATOS (KUCOIN API) ---
+# --- NUEVA FUNCIÓN: Obtener TODOS los símbolos de KuCoin ---
+async def get_all_kucoin_symbols():
+    url = "https://api.kucoin.com/api/v1/symbols"
+    print(f"[{datetime.now().isoformat()}] Fetching all symbols from KuCoin API: {url}")
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, timeout=15.0) 
+            response.raise_for_status() 
+            data = response.json()
+            
+            if not data or not data.get('data') or not isinstance(data['data'], list):
+                raise ValueError("API de KuCoin para símbolos devolvió respuesta inválida o sin datos.")
+            
+            filtered_symbols = []
+            for item in data['data']:
+                if item.get('enableTrading') and item.get('baseCurrency') and item.get('quoteCurrency'):
+                    if item['quoteCurrency'] == 'USDT' or item['quoteCurrency'] == 'USDC':
+                        filtered_symbols.append(f"{item['baseCurrency']}-{item['quoteCurrency']}")
+            
+            filtered_symbols = sorted(list(set(filtered_symbols)))
+            print(f"[{datetime.now().isoformat()}] Fetched {len(filtered_symbols)} symbols from KuCoin.")
+            # NUEVO LOG: Mostrar los primeros 10 símbolos cargados
+            print(f"[{datetime.now().isoformat()}] First 10 symbols: {filtered_symbols[:10]}")
+            return filtered_symbols
+
+    except httpx.HTTPStatusError as e:
+        print(f"Error HTTP al obtener símbolos de KuCoin: {e.response.status_code} - {e.response.text}")
+        return []
+    except httpx.RequestError as e:
+        print(f"Error de red al obtener símbolos de KuCoin: {e}")
+        return []
+    except ValueError as e:
+        print(f"Error de datos de KuCoin para símbolos: {e}")
+        return []
+    except Exception as e:
+        print(f"Error inesperado al obtener símbolos de KuCoin: {e}")
+        return []
+
+
+# --- FUNCIONES DE OBTENCIÓN DE DATOS (KUCOIN API para Klines) ---
 async def get_kucoin_klines(symbol, interval=KUCOIN_INTERVAL, limit=KUCOIN_LIMIT):
     kucoin_symbol = symbol 
     url = f"https://api.kucoin.com/api/v1/market/candles?symbol={kucoin_symbol}&type={interval}&limit={limit}"
@@ -113,7 +142,8 @@ async def get_kucoin_klines(symbol, interval=KUCOIN_INTERVAL, limit=KUCOIN_LIMIT
             data = response.json()
             
             if not data or not data.get('data') or not isinstance(data['data'], list) or len(data['data']) == 0:
-                raise ValueError(f"API de KuCoin para {kucoin_symbol} devolvió respuesta válida pero sin datos de velas.")
+                # Modificado el mensaje de error para ser más específico
+                raise ValueError(f"API de KuCoin para {kucoin_symbol} devolvió respuesta válida pero SIN DATOS DE VELAS (lista vacía).")
             
             formatted_prices = []
             for kline in data['data']:
@@ -416,7 +446,7 @@ def get_recommendations():
 
     recommendations = []
     current_time_utc = datetime.now(timezone.utc) 
-    threshold_time_utc = current_time_utc - timedelta(hours=24) 
+    threshold_time_utc = current_time_utc - timedelta(hours=24) # Usamos 24 horas para el historial que se muestra
 
     try:
         all_recommendations = [] 
