@@ -22,7 +22,7 @@ LAST_REC_FILE = 'last_recommendations.csv'
 
 current_analysis_cache = {} 
 
-# La lista SYMBOLS_TO_MONITOR ahora se poblará dinámicamente
+# La lista SYMBOLS_TO_MONITOR se seguirá poblando dinámicamente al inicio.
 SYMBOLS_TO_MONITOR = [] 
 
 # --- FUNCIONES DE UTILIDAD CSV ---
@@ -33,7 +33,7 @@ def ensure_csv_exists():
             writer.writerow(['timestamp', 'symbol', 'recommendation', 'prev_recommendation', 'metric_type', 'metric_value', 'details'])
     
     if not os.path.exists(LAST_REC_FILE):
-        with open(LAST_REC_FILE, mode='w', newline='', encoding='utf-8') as file:
+        with open(LAST_FILE, mode='w', newline='', encoding='utf-8') as file:
             writer = csv.writer(file)
             writer.writerow(['symbol', 'timestamp', 'recommendation', 'sma_rec', 'rsi_rec', 'bb_rec', 'last_price'])
 
@@ -93,7 +93,6 @@ def update_last_recommendation_file(symbol, timestamp_iso, recommendation, sma_r
 
 # --- NUEVA FUNCIÓN: Obtener TODOS los símbolos de KuCoin ---
 async def get_all_kucoin_symbols():
-    # Endpoint para obtener todos los símbolos de mercado
     url = "https://api.kucoin.com/api/v1/symbols"
     print(f"[{datetime.now().isoformat()}] Fetching all symbols from KuCoin API: {url}")
     try:
@@ -105,16 +104,13 @@ async def get_all_kucoin_symbols():
             if not data or not data.get('data') or not isinstance(data['data'], list):
                 raise ValueError("API de KuCoin para símbolos devolvió respuesta inválida o sin datos.")
             
-            # Filtrar por pares USDT y USD, y que estén online
             filtered_symbols = []
             for item in data['data']:
                 if item.get('enableTrading') and item.get('baseCurrency') and item.get('quoteCurrency'):
-                    # Preferimos USDT como moneda base para el par
-                    if item['quoteCurrency'] == 'USDT' or item['quoteCurrency'] == 'USDC': # Añadido USDC
-                        # El formato de símbolo de KuCoin es BASE-QUOTE (ej. BTC-USDT)
+                    # Filtramos por USDT o USDC como moneda base para el par
+                    if item['quoteCurrency'] == 'USDT' or item['quoteCurrency'] == 'USDC':
                         filtered_symbols.append(f"{item['baseCurrency']}-{item['quoteCurrency']}")
             
-            # Eliminar duplicados y ordenar alfabéticamente
             filtered_symbols = sorted(list(set(filtered_symbols)))
             print(f"[{datetime.now().isoformat()}] Fetched {len(filtered_symbols)} symbols from KuCoin.")
             return filtered_symbols
@@ -124,6 +120,9 @@ async def get_all_kucoin_symbols():
         return []
     except httpx.RequestError as e:
         print(f"Error de red al obtener símbolos de KuCoin: {e}")
+        return []
+    except ValueError as e:
+        print(f"Error de datos de KuCoin para símbolos: {e}")
         return []
     except Exception as e:
         print(f"Error inesperado al obtener símbolos de KuCoin: {e}")
@@ -261,7 +260,7 @@ def get_combined_signals(sma_short, sma_long, rsi, bollinger_bands, closing_pric
         prev_sma_long = valid_sma_long[-2]
         if prev_sma_short <= prev_sma_long and last_sma_short > last_sma_long:
             sma_rec = 'buy'
-        elif prev_sma_short >= prev_sma_long and last_sma_short < last_sma_long:
+        elif prev_sma_short >= prev_sma_long and last_sma_long < last_sma_long:
             sma_rec = 'sell'
     else:
         sma_rec = 'N/A'
@@ -448,7 +447,7 @@ def get_recommendations():
 
     recommendations = []
     current_time_utc = datetime.now(timezone.utc) 
-    threshold_time_utc = current_time_utc - timedelta(hours=24) 
+    threshold_time_utc = current_time_utc - timedelta(hours=24) # Usamos 24 horas para el historial que se muestra
 
     try:
         all_recommendations = [] 
@@ -499,6 +498,17 @@ def get_recommendations():
     except Exception as e:
         print(f"Error getting recommendations: {e}")
         return jsonify({'message': f'Internal server error: {str(e)}'}), 500
+
+# Endpoint para obtener la lista de símbolos disponibles dinámicamente
+@app.route('/get_available_symbols', methods=['GET'])
+async def get_available_symbols():
+    try:
+        symbols = await get_all_kucoin_symbols() # Usar la función que ya creamos
+        return jsonify(symbols), 200
+    except Exception as e:
+        print(f"Error fetching available symbols: {e}")
+        return jsonify({'message': f'Error fetching available symbols: {str(e)}'}), 500
+
 
 # Endpoint para obtener las señales actuales y datos de Klines para el gráfico
 @app.route('/get_latest_analysis/<symbol>', methods=['GET'])
@@ -551,37 +561,51 @@ async def get_latest_analysis(symbol):
 # --- Lógica de Programación de Tareas ---
 scheduler = BackgroundScheduler()
 
-SYMBOLS_TO_MONITOR = [
-    "BTC-USDT", "ETH-USDT", "BNB-USDT", "XRP-USDT", "SOL-USDT", "ADA-USDT", 
-    "DOGE-USDT", "SHIB-USDT", "DOT-USDT", "LTC-USDT", "LINK-USDT", "MATIC-USDT",
-    "TRX-USDT", "AVAX-USDT", "UNI-USDT", "FIL-USDT", "ICP-USDT", "APT-USDT", 
-    "SUI-USDT", "NEAR-USDT", "ATOM-USDT", "ARB-USDT", "OP-USDT", "IMX-USDT", 
-    "AAVE-USDT", "ALGO-USDT", "FTM-USDT", "VET-USDT", "CHZ-USDT", 
-    "GRT-USDT", "EOS-USDT", "SAND-USDT", "MANA-USDT",
-    "USDC-USDT", 
-]
+# SYMBOLS_TO_MONITOR será populado dinámicamente al inicio
+# Para asegurar que el scheduler tenga una lista desde el primer momento, se poblará aquí.
+# Si el fetch falla, la lista puede quedar vacía, pero el scheduler seguirá intentando.
 
-scheduler.add_job(
-    lambda: asyncio.run(scheduled_analysis_job(SYMBOLS_TO_MONITOR)), 
-    'interval',
-    minutes=2, 
-    id='full_crypto_analysis',
-    max_instances=1 
-)
-
+# Esto se ejecuta una vez cuando la aplicación Flask se inicia
 if not scheduler.running:
     scheduler.start()
     print("Scheduler started upon module load.")
-    print("Running initial scheduled job to populate cache.")
+    print("Running initial scheduled job to populate cache and start analysis.")
+    
+    # Primero, poblar SYMBOLS_TO_MONITOR
+    # Esto es síncrono para asegurar que la lista esté antes de agregar el job.
     try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError: 
+        # Se necesita un loop de eventos para llamar a una función async fuera de una ruta.
+        # Esto solo se ejecuta una vez al inicio del servidor.
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-    
-    loop.run_until_complete(scheduled_analysis_job(SYMBOLS_TO_MONITOR))
+        symbols_from_api = loop.run_until_complete(get_all_kucoin_symbols())
+        SYMBOLS_TO_MONITOR.extend(symbols_from_api) # Rellenar la lista global
+
+        if not SYMBOLS_TO_MONITOR:
+            print("[CRITICAL] No symbols loaded from KuCoin. Scheduled job will not run effectively.")
+        else:
+            print(f"[{datetime.now().isoformat()}] Initial SYMBOLS_TO_MONITOR populated with {len(SYMBOLS_TO_MONITOR)} symbols.")
+
+            # Añadir la tarea programada DESPUÉS de que SYMBOLS_TO_MONITOR esté poblado
+            scheduler.add_job(
+                lambda: asyncio.run(scheduled_analysis_job(SYMBOLS_TO_MONITOR)), 
+                'interval',
+                minutes=2, 
+                id='full_crypto_analysis',
+                max_instances=1 
+            )
+            
+            # Ejecutar la tarea programada al inicio para poblar la cache lo antes posible
+            # Se ejecuta solo si hay símbolos para evitar errores.
+            if SYMBOLS_TO_MONITOR:
+                loop.run_until_complete(scheduled_analysis_job(SYMBOLS_TO_MONITOR))
+
+    except Exception as e:
+        print(f"[{datetime.now().isoformat()}] Error during initial scheduler setup or symbol fetch: {e}")
+        print("Scheduler might not be fully operational or symbols list is empty.")
 
 
 if __name__ == '__main__':
     print("Running Flask app in __main__ block (for local development).")
+    # Para ejecución local con 'python app.py', usar reloader=False para evitar doble ejecución del scheduler
     app.run(debug=True, host='0.0.0.0', port=5000, use_reloader=False)
