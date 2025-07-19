@@ -398,13 +398,37 @@ async def scheduled_analysis_job(symbols):
 
                 if last_prev_rec != 'N/A' and current_overall_rec != 'N/A':
                     if current_overall_rec == last_prev_rec:
-                        metric_type = 'Acierto'
-                        match_count = 0
-                        if individual_recs['sma'] == last_prev_sma_rec and individual_recs['sma'] != 'N/A': match_count += 1
-                        if individual_recs['rsi'] == last_prev_rsi_rec and individual_recs['rsi'] != 'N/A': match_count += 1
-                        if individual_recs['bb'] == last_prev_bb_rec and individual_recs['bb'] != 'N/A': match_count += 1
-                        metric_value = (match_count / 3) * 100 if match_count > 0 else 0
-                        details = f"Rec. mantenida. Indicadores coincidentes: {match_count}/3."
+                   match_count = 0
+        if individual_recs['sma'] == last_prev_sma_rec and individual_recs['sma'] != 'N/A': match_count += 1
+        if individual_recs['rsi'] == last_prev_rsi_rec and individual_recs['rsi'] != 'N/A': match_count += 1
+        if individual_recs['bb'] == last_prev_bb_rec and individual_recs['bb'] != 'N/A': match_count += 1
+        metric_value = (match_count / 3) * 100 if match_count > 0 else 0
+
+        if match_count >= 2:
+            metric_type = 'Acierto'
+            details = f"Rec. mantenida. Indicadores coincidentes: {match_count}/3."
+        else:
+            metric_type = 'N/A'
+            details = f"Rec. mantenida pero pocos indicadores coinciden ({match_count}/3)."
+
+    else:
+        change_count = 0
+        if individual_recs['sma'] != last_prev_sma_rec and individual_recs['sma'] != 'N/A': change_count += 1
+        if individual_recs['rsi'] != last_prev_rsi_rec and individual_recs['rsi'] != 'N/A': change_count += 1
+        if individual_recs['bb'] != last_prev_bb_rec and individual_recs['bb'] != 'N/A': change_count += 1
+        metric_value = (change_count / 3) * 100 if change_count > 0 else 0
+
+        if change_count >= 1:
+            metric_type = 'Riesgo'
+            details = f"Rec. cambió de '{last_prev_rec}' a '{current_overall_rec}'. Indicadores cambiantes: {change_count}/3."
+        else:
+            metric_type = 'N/A'
+            details = f"Rec. cambió pero sin cambios detectados en indicadores."
+
+else:
+    details = "Primera recomendación para el símbolo o datos insuficientes para comparar."
+    metric_type = 'N/A'
+    metric_value = 0.0
                     else:
                         metric_type = 'Riesgo'
                         change_count = 0
