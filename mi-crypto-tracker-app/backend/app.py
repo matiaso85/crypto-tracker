@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+rom flask import Flask, request, jsonify
 from flask_cors import CORS
 import csv
 import os
@@ -398,7 +398,7 @@ async def scheduled_analysis_job(symbols):
 
                 if last_prev_rec != 'N/A' and current_overall_rec != 'N/A':
                     if current_overall_rec == last_prev_rec:
-                   match_count = 0
+        match_count = 0
         if individual_recs['sma'] == last_prev_sma_rec and individual_recs['sma'] != 'N/A': match_count += 1
         if individual_recs['rsi'] == last_prev_rsi_rec and individual_recs['rsi'] != 'N/A': match_count += 1
         if individual_recs['bb'] == last_prev_bb_rec and individual_recs['bb'] != 'N/A': match_count += 1
@@ -410,25 +410,7 @@ async def scheduled_analysis_job(symbols):
         else:
             metric_type = 'N/A'
             details = f"Rec. mantenida pero pocos indicadores coinciden ({match_count}/3)."
-
-    else:
-        change_count = 0
-        if individual_recs['sma'] != last_prev_sma_rec and individual_recs['sma'] != 'N/A': change_count += 1
-        if individual_recs['rsi'] != last_prev_rsi_rec and individual_recs['rsi'] != 'N/A': change_count += 1
-        if individual_recs['bb'] != last_prev_bb_rec and individual_recs['bb'] != 'N/A': change_count += 1
-        metric_value = (change_count / 3) * 100 if change_count > 0 else 0
-
-        if change_count >= 1:
-            metric_type = 'Riesgo'
-            details = f"Rec. cambió de '{last_prev_rec}' a '{current_overall_rec}'. Indicadores cambiantes: {change_count}/3."
-        else:
-            metric_type = 'N/A'
-            details = f"Rec. cambió pero sin cambios detectados en indicadores."
-
-else:
-    details = "Primera recomendación para el símbolo o datos insuficientes para comparar."
-    metric_type = 'N/A'
-    metric_value = 0.0
+                        details = f"Rec. mantenida. Indicadores coincidentes: {match_count}/3."
                     else:
                         metric_type = 'Riesgo'
                         change_count = 0
@@ -634,6 +616,30 @@ if not scheduler.running:
 if __name__ == '__main__':
     print("Running Flask app in __main__ block (for local development).")
     app.run(debug=True, host='0.0.0.0', port=5000, use_reloader=False)
+
+@app.route('/get_current_opportunities', methods=['GET'])
+def get_current_opportunities():
+    buy, sell, hold, error = [], [], [], []
+    for symbol, analysis in current_analysis_cache.items():
+        try:
+            rec = analysis.get('overall_rec', 'hold')
+            if rec == 'buy':
+                buy.append(symbol)
+            elif rec == 'sell':
+                sell.append(symbol)
+            elif rec == 'hold':
+                hold.append(symbol)
+            else:
+                error.append(symbol)
+        except:
+            error.append(symbol)
+    return jsonify({"buy": buy, "sell": sell, "hold": hold, "error": error}), 200
+
+@app.route('/force_analysis/<symbol>', methods=['POST'])
+def force_analysis(symbol):
+    asyncio.run(scheduled_analysis_job([symbol]))
+    return jsonify({"status": "ok"}), 200
+
 def start_scheduler():
     from threading import Thread
 
