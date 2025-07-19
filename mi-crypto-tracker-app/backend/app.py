@@ -22,7 +22,7 @@ LAST_REC_FILE = 'last_recommendations.csv'
 
 current_analysis_cache = {} 
 
-# La lista SYMBOLS_TO_MONITOR se seguirá poblando dinámicamente al inicio.
+# La lista SYMBOLS_TO_MONITOR se poblará dinámicamente al inicio
 SYMBOLS_TO_MONITOR = [] 
 
 # --- FUNCIONES DE UTILIDAD CSV ---
@@ -33,7 +33,7 @@ def ensure_csv_exists():
             writer.writerow(['timestamp', 'symbol', 'recommendation', 'prev_recommendation', 'metric_type', 'metric_value', 'details'])
     
     if not os.path.exists(LAST_REC_FILE):
-        with open(LAST_FILE, mode='w', newline='', encoding='utf-8') as file:
+        with open(LAST_REC_FILE, mode='w', newline='', encoding='utf-8') as file:
             writer = csv.writer(file)
             writer.writerow(['symbol', 'timestamp', 'recommendation', 'sma_rec', 'rsi_rec', 'bb_rec', 'last_price'])
 
@@ -93,6 +93,7 @@ def update_last_recommendation_file(symbol, timestamp_iso, recommendation, sma_r
 
 # --- NUEVA FUNCIÓN: Obtener TODOS los símbolos de KuCoin ---
 async def get_all_kucoin_symbols():
+    # Endpoint para obtener todos los símbolos de mercado
     url = "https://api.kucoin.com/api/v1/symbols"
     print(f"[{datetime.now().isoformat()}] Fetching all symbols from KuCoin API: {url}")
     try:
@@ -107,8 +108,9 @@ async def get_all_kucoin_symbols():
             filtered_symbols = []
             for item in data['data']:
                 if item.get('enableTrading') and item.get('baseCurrency') and item.get('quoteCurrency'):
-                    # Filtramos por USDT o USDC como moneda base para el par
+                    # Filtramos por pares USDT o USDC como moneda base para el par
                     if item['quoteCurrency'] == 'USDT' or item['quoteCurrency'] == 'USDC':
+                        # El formato de símbolo de KuCoin es BASE-QUOTE (ej. BTC-USDT)
                         filtered_symbols.append(f"{item['baseCurrency']}-{item['quoteCurrency']}")
             
             filtered_symbols = sorted(list(set(filtered_symbols)))
@@ -260,7 +262,7 @@ def get_combined_signals(sma_short, sma_long, rsi, bollinger_bands, closing_pric
         prev_sma_long = valid_sma_long[-2]
         if prev_sma_short <= prev_sma_long and last_sma_short > last_sma_long:
             sma_rec = 'buy'
-        elif prev_sma_short >= prev_sma_long and last_sma_long < last_sma_long:
+        elif prev_sma_short >= prev_sma_long and last_sma_short < last_sma_long:
             sma_rec = 'sell'
     else:
         sma_rec = 'N/A'
@@ -326,7 +328,6 @@ async def scheduled_analysis_job(symbols):
     for symbol in symbols:
         try:
             print(f"[{datetime.now().isoformat()}] Analyzing {symbol}...")
-            # CAMBIADO: Usar get_kucoin_klines
             klines_data = await get_kucoin_klines(symbol) 
             
             min_required_klines = max(20, 50, 14) + 1 
@@ -354,7 +355,7 @@ async def scheduled_analysis_job(symbols):
                 'sma': individual_recs['sma'],
                 'rsi': individual_recs['rsi'],
                 'bb': individual_recs['bb'],
-                'klines': klines_data, # Guarda los klines para el gráfico
+                'klines': klines_data, 
                 'sma_short': sma_short,
                 'sma_long': sma_long,
                 'bb_bands': bollinger_bands,
@@ -420,7 +421,7 @@ async def scheduled_analysis_job(symbols):
                 with open(CSV_FILE, mode='a', newline='', encoding='utf-8') as file:
                     writer = csv.writer(file)
                     writer.writerow([
-                        now_dt.isoformat().replace('+00:00', 'Z'), # Formato ISO para JS
+                        now_dt.isoformat().replace('+00:00', 'Z'), 
                         symbol,
                         current_overall_rec,
                         last_prev_rec,
@@ -447,7 +448,7 @@ def get_recommendations():
 
     recommendations = []
     current_time_utc = datetime.now(timezone.utc) 
-    threshold_time_utc = current_time_utc - timedelta(hours=24) # Usamos 24 horas para el historial que se muestra
+    threshold_time_utc = current_time_utc - timedelta(hours=24) 
 
     try:
         all_recommendations = [] 
@@ -499,7 +500,7 @@ def get_recommendations():
         print(f"Error getting recommendations: {e}")
         return jsonify({'message': f'Internal server error: {str(e)}'}), 500
 
-# Endpoint para obtener la lista de símbolos disponibles dinámicamente
+# NUEVO ENDPOINT: Para que el frontend obtenga la lista de símbolos disponibles dinámicamente
 @app.route('/get_available_symbols', methods=['GET'])
 async def get_available_symbols():
     try:
@@ -607,5 +608,4 @@ if not scheduler.running:
 
 if __name__ == '__main__':
     print("Running Flask app in __main__ block (for local development).")
-    # Para ejecución local con 'python app.py', usar reloader=False para evitar doble ejecución del scheduler
     app.run(debug=True, host='0.0.0.0', port=5000, use_reloader=False)
