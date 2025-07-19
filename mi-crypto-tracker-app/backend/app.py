@@ -610,3 +610,16 @@ if not scheduler.running:
 if __name__ == '__main__':
     print("Running Flask app in __main__ block (for local development).")
     app.run(debug=True, host='0.0.0.0', port=5000, use_reloader=False)
+def start_scheduler():
+    from threading import Thread
+
+    async def init_scheduler():
+        global SYMBOLS_TO_MONITOR
+        SYMBOLS_TO_MONITOR = await get_all_kucoin_symbols()
+        print(f"[INIT] Inicializando análisis de {len(SYMBOLS_TO_MONITOR)} criptos.")
+        scheduler.add_job(lambda: asyncio.run(scheduled_analysis_job(SYMBOLS_TO_MONITOR)), 'interval', minutes=5)
+        scheduler.start()
+
+    Thread(target=lambda: asyncio.run(init_scheduler())).start()
+
+start_scheduler()
