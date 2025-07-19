@@ -573,7 +573,8 @@
                 const data = await response.json();
                 console.log(`Frontend: Análisis de ${symbol} recibido del backend.`, data);
                 return data;
-            } catch (error) {
+            }
+            catch (error) {
                 console.error(`Frontend: Error al obtener análisis de ${symbol} del backend:`, error);
                 return null;
             }
@@ -602,7 +603,7 @@
                     const slice = data.slice(i - period + 1, i + 1);
                     const mean = slice.reduce((acc, val) => acc + val, 0) / period;
                     const stdDev = Math.sqrt(slice.reduce((acc, val) => acc + Math.pow(val - mean, 2), 0) / period);
-                    middle.push({ y: mean }); upper.push({ y: mean + (stdDev * std_dev_multiplier) }); lower.push({ y: mean - (std_dev * std_dev_multiplier) });
+                    middle.push({ y: mean }); upper.push({ y: mean + (std_dev * std_dev_multiplier) }); lower.push({ y: mean - (std_dev * std_dev_multiplier) });
                 }
             }
             return { middle, upper, lower };
@@ -829,19 +830,18 @@
         }
 
         async function loadHistoricalRecommendationsFromBackend() {
-            // Limpiar todas las listas del historial
             allHistoryList.innerHTML = '<li>Cargando historial...</li>';
             aciertosList.innerHTML = '<li>Cargando...</li>';
             riesgosList.innerHTML = '<li>Cargando...</li>';
 
-            console.log("Cargando historial desde backend:", `${BACKEND_URL}/get_recommendations?page=${currentPage}&limit=${ROWS_PER_PAGE}`); // Enviar parámetros de paginación
+            console.log("Cargando historial desde backend:", `${BACKEND_URL}/get_recommendations?page=${currentPage}&limit=${ROWS_PER_PAGE}`); 
             try {
                 const response = await fetch(`${BACKEND_URL}/get_recommendations?page=${currentPage}&limit=${ROWS_PER_PAGE}`);
                 if (!response.ok) {
                     const errorText = await response.text();
                     throw new Error(`Error HTTP al cargar historial desde backend: ${response.status} - ${response.statusText}. Detalles: ${errorText}`);
                 }
-                const data = await response.json(); // Ahora el backend devuelve un objeto con 'recommendations', 'total_pages', etc.
+                const data = await response.json(); 
                 const history = data.recommendations;
                 totalPages = data.total_pages;
                 pageInfoSpan.textContent = `Página ${data.current_page} de ${totalPages}`;
@@ -849,7 +849,6 @@
                 nextPageBtn.disabled = (data.current_page === totalPages);
 
 
-                // Limpiar después de cargar (si hay datos) o mantener el "Cargando..." si falla el fetch.
                 allHistoryList.innerHTML = '';
                 aciertosList.innerHTML = '';
                 riesgosList.innerHTML = '';
@@ -1002,8 +1001,7 @@
             renderPriceChart(currentPriceDataCache, currentSmaShortCache, currentSmaLongCache, currentBollingerBandsCache, currentRsiCache);
             
             // Actualizar señales individuales con los datos recibidos del backend
-            // analysisData ya contiene overall_rec, sma, rsi, bb
-            updateSignals(analysisData, null); // Pasamos null para closingPrices ya que no se usa en updateSignals
+            updateSignals(analysisData, null); 
             
             startUpdateTimer(UPDATE_INTERVAL_SELECTED_CRYPTO / 1000);
             console.log("Análisis de criptomoneda seleccionada completado (datos de backend).");
@@ -1012,8 +1010,8 @@
         // updateAllCryptosOpportunities ahora también obtendrá datos del backend
         async function updateAllCryptosOpportunities() {
             console.log("Inicio de updateAllCryptosOpportunities (obteniendo de backend).");
-            // Para esta versión, como el backend ya está guardando, simplemente recargamos el historial
-            // que es donde están las últimas oportunidades.
+            // Para esta versión, esta función se encargará de recargar el historial (que muestra las últimas oportunidades).
+            // La lógica de cálculo y guardado la hace el scheduler del backend.
             loadHistoricalRecommendationsFromBackend();
             
             console.log("updateAllCryptosOpportunities: Recargando el historial para mostrar las últimas oportunidades.");
