@@ -22,6 +22,7 @@ LAST_REC_FILE = 'last_recommendations.csv'
 
 current_analysis_cache = {} 
 
+# --- Lista de Símbolos a Monitorear (DEBE COINCIDIR CON EL FRONTEND) ---
 SYMBOLS_TO_MONITOR = [
     "BTC-USDT", "ETH-USDT", "BNB-USDT", "XRP-USDT", "SOL-USDT", "ADA-USDT", 
     "DOGE-USDT", "SHIB-USDT", "DOT-USDT", "LTC-USDT", "LINK-USDT", "MATIC-USDT",
@@ -101,7 +102,9 @@ def update_last_recommendation_file(symbol, timestamp_iso, recommendation, sma_r
 
 # --- FUNCIONES DE OBTENCIÓN DE DATOS (KUCOIN API) ---
 async def get_kucoin_klines(symbol, interval=KUCOIN_INTERVAL, limit=KUCOIN_LIMIT):
+    # El símbolo ya viene en formato BASE-QUOTE (ej. BTC-USDT) del frontend.
     kucoin_symbol = symbol 
+    
     url = f"https://api.kucoin.com/api/v1/market/candles?symbol={kucoin_symbol}&type={interval}&limit={limit}"
     
     try:
@@ -137,7 +140,7 @@ async def get_kucoin_klines(symbol, interval=KUCOIN_INTERVAL, limit=KUCOIN_LIMIT
         return None
 
 
-# --- FUNCIONES DE CÁLCULO DE INDICADORES ---
+# --- FUNCIONES DE CÁLCULO DE INDICADORES (No cambian) ---
 def calculate_sma(data, period):
     sma = []
     if not data or len(data) < period:
@@ -509,7 +512,6 @@ async def get_latest_analysis(symbol):
 # --- Lógica de Programación de Tareas ---
 scheduler = BackgroundScheduler()
 
-# LISTA DE SÍMBOLOS A MONITOREAR (¡Necesitas que esta lista coincida con tu frontend o se cargue de alguna manera!)
 SYMBOLS_TO_MONITOR = [
     "BTC-USDT", "ETH-USDT", "BNB-USDT", "XRP-USDT", "SOL-USDT", "ADA-USDT", 
     "DOGE-USDT", "SHIB-USDT", "DOT-USDT", "LTC-USDT", "LINK-USDT", "MATIC-USDT",
