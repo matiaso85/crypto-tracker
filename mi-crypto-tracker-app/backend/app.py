@@ -9,7 +9,8 @@ import httpx
 import sys # Importar sys para manejar el bucle de eventos
 
 app = Flask(__name__)
-CORS(app)
+# CORREGIDO: Configuración explícita de CORS para permitir todas las solicitudes de origen
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 # --- BACKEND CONFIGURATION ---
 KUCOIN_INTERVAL = "1hour"
