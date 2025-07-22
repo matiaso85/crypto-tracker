@@ -222,7 +222,7 @@ async def get_kucoin_klines(symbol, interval=KUCOIN_INTERVAL, limit=KUCOIN_LIMIT
         return None
 
 
-# --- INDICATOR CALCULATION FUNCTIONS (Unchanged) ---
+# --- INDICATOR CALCULATION FUNCTIONS ---
 def calculate_sma(data, period):
     """Calculates Simple Moving Average (SMA) for given data."""
     sma = []
@@ -312,6 +312,13 @@ def get_combined_signals(sma_short, sma_long, rsi, bollinger_bands, closing_pric
     rsi_rec = 'hold'
     bb_rec = 'hold'
 
+    # Parámetros de los indicadores
+    SMA_SHORT_PERIOD = 10 # Antes 20
+    SMA_LONG_PERIOD = 30  # Antes 50
+    RSI_OVERBOUGHT = 65   # Antes 70
+    RSI_OVERSOLD = 35     # Antes 30
+    BB_PERIOD = 15        # Antes 20
+
     valid_sma_short = [v['y'] for v in sma_short if v is not None]
     valid_sma_long = [v['y'] for v in sma_long if v is not None]
     if len(valid_sma_short) >= 2 and len(valid_sma_long) >= 2:
@@ -329,9 +336,9 @@ def get_combined_signals(sma_short, sma_long, rsi, bollinger_bands, closing_pric
     valid_rsi = [v['y'] for v in rsi if v is not None]
     if len(valid_rsi) > 0:
         last_rsi = valid_rsi[-1]
-        if last_rsi > 70:
+        if last_rsi > RSI_OVERBOUGHT: # Usar nuevo umbral
             rsi_rec = 'sell'
-        elif last_rsi < 30:
+        elif last_rsi < RSI_OVERSOLD: # Usar nuevo umbral
             rsi_rec = 'buy'
     else:
         rsi_rec = 'N/A'
@@ -368,14 +375,12 @@ def get_combined_signals(sma_short, sma_long, rsi, bollinger_bands, closing_pric
 
     overall_recommendation = 'hold'
 
-    if (buy_count + sell_count) >= 2:
-        if buy_count >= 2 and sell_count == 0:
-            overall_recommendation = 'buy'
-        elif sell_count >= 2 and buy_count == 0:
-            overall_recommendation = 'sell'
-        else:
-            overall_recommendation = 'hold'
-    else:
+    # Lógica de combinación de señales más relajada
+    if buy_count > sell_count and buy_count >= 1: # Si hay más señales de compra y al menos una
+        overall_recommendation = 'buy'
+    elif sell_count > buy_count and sell_count >= 1: # Si hay más señales de venta y al menos una
+        overall_recommendation = 'sell'
+    else: # En caso de empate, o solo "hold" / "N/A"
         overall_recommendation = 'hold'
 
     # Se devuelven los conteos para fines de diagnóstico
@@ -390,15 +395,21 @@ async def scheduled_analysis_job(symbols):
     for a list of symbols. Results are cached and saved to CSV if conditions are met.
     """
     print(f"[{datetime.now().isoformat()}] Scheduled job started for {len(symbols)} symbols.")
+    
+    # Definir los periodos de los indicadores aquí para usarlos en min_required_klines
+    SMA_SHORT_PERIOD = 10 
+    SMA_LONG_PERIOD = 30  
+    RSI_PERIOD = 14
+    BB_PERIOD = 15        
+
     for symbol in symbols:
         try:
             print(f"[{datetime.now().isoformat()}] Analyzing {symbol}...")
             klines_data = await get_kucoin_klines(symbol)
 
             # Define la cantidad mínima de velas requeridas para los indicadores
-            # SMA 20, SMA 50, RSI 14, BB 20
-            # El máximo de los periodos + 1 para asegurar que haya suficientes puntos para el cálculo inicial.
-            min_required_klines = max(20, 50, 14) + 1 
+            # Se usa el máximo de los periodos para asegurar suficientes datos
+            min_required_klines = max(SMA_SHORT_PERIOD, SMA_LONG_PERIOD, RSI_PERIOD, BB_PERIOD) + 1 
             
             if not klines_data or len(klines_data) < min_required_klines:
                 print(f"  [{datetime.now().isoformat()}] {symbol}: Datos insuficientes. Velas obtenidas: {len(klines_data) if klines_data else 0}, Requeridas: {min_required_klines}. Saltando análisis detallado.")
@@ -413,10 +424,11 @@ async def scheduled_analysis_job(symbols):
                 closing_prices = [p['y'] for p in klines_data]
                 current_price = closing_prices[-1]
 
-                sma_short = calculate_sma(closing_prices, 20)
-                sma_long = calculate_sma(closing_prices, 50)
-                bollinger_bands = calculate_bollinger_bands(closing_prices, 20, 2)
-                rsi = calculate_rsi(closing_prices, 14)
+                # Se pasan los periodos actualizados a las funciones de cálculo
+                sma_short = calculate_sma(closing_prices, SMA_SHORT_PERIOD)
+                sma_long = calculate_sma(closing_prices, SMA_LONG_PERIOD)
+                bollinger_bands = calculate_bollinger_bands(closing_prices, BB_PERIOD, 2) # std_dev_multiplier se mantiene en 2
+                rsi = calculate_rsi(closing_prices, RSI_PERIOD)
 
                 combined_signals = get_combined_signals(sma_short, sma_long, rsi, bollinger_bands, closing_prices)
                 current_overall_rec = combined_signals['overall']
@@ -607,7 +619,13 @@ async def get_latest_analysis(symbol):
     try:
         klines_data = await get_kucoin_klines(symbol)
 
-        min_required_klines = max(20, 50, 14) + 1
+        # Definir los periodos de los indicadores aquí para usarlos en min_required_klines
+        SMA_SHORT_PERIOD = 10 
+        SMA_LONG_PERIOD = 30  
+        RSI_PERIOD = 14
+        BB_PERIOD = 15        
+
+        min_required_klines = max(SMA_SHORT_PERIOD, SMA_LONG_PERIOD, RSI_PERIOD, BB_PERIOD) + 1
         if not klines_data or len(klines_data) < min_required_klines:
             print(f"[{datetime.now().isoformat()}] Insufficient data for {symbol} on live fetch for frontend. Returning empty.")
             return jsonify({
@@ -617,10 +635,11 @@ async def get_latest_analysis(symbol):
 
         closing_prices = [p['y'] for p in klines_data]
 
-        sma_short = calculate_sma(closing_prices, 20)
-        sma_long = calculate_sma(closing_prices, 50)
-        bollinger_bands = calculate_bollinger_bands(closing_prices, 20, 2)
-        rsi = calculate_rsi(closing_prices, 14)
+        # Se pasan los periodos actualizados a las funciones de cálculo
+        sma_short = calculate_sma(closing_prices, SMA_SHORT_PERIOD)
+        sma_long = calculate_sma(closing_prices, SMA_LONG_PERIOD)
+        bollinger_bands = calculate_bollinger_bands(closing_prices, BB_PERIOD, 2)
+        rsi = calculate_rsi(closing_prices, RSI_PERIOD)
         combined_signals = get_combined_signals(sma_short, sma_long, rsi, bollinger_bands, closing_prices)
 
         response_data = {
