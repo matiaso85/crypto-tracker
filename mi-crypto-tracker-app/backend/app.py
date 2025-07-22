@@ -378,7 +378,9 @@ def get_combined_signals(sma_short, sma_long, rsi, bollinger_bands, closing_pric
     else:
         overall_recommendation = 'hold'
 
-    return {'sma': sma_rec, 'rsi': rsi_rec, 'bb': bb_rec, 'overall': overall_recommendation}
+    # Se devuelven los conteos para fines de diagnóstico
+    return {'sma': sma_rec, 'rsi': rsi_rec, 'bb': bb_rec, 'overall': overall_recommendation,
+            'buy_count': buy_count, 'sell_count': sell_count, 'na_count': na_count}
 
 
 # --- SCHEDULED TASK TO FETCH AND ANALYZE DATA ---
@@ -393,12 +395,20 @@ async def scheduled_analysis_job(symbols):
             print(f"[{datetime.now().isoformat()}] Analyzing {symbol}...")
             klines_data = await get_kucoin_klines(symbol)
 
-            min_required_klines = max(20, 50, 14) + 1 # Min klines needed for indicators
+            # Define la cantidad mínima de velas requeridas para los indicadores
+            # SMA 20, SMA 50, RSI 14, BB 20
+            # El máximo de los periodos + 1 para asegurar que haya suficientes puntos para el cálculo inicial.
+            min_required_klines = max(20, 50, 14) + 1 
+            
             if not klines_data or len(klines_data) < min_required_klines:
-                print(f"[{datetime.now().isoformat()}] Insufficient data for {symbol}. Needed {min_required_klines}, got {len(klines_data) if klines_data else 0}. Skipping analysis.")
+                print(f"  [{datetime.now().isoformat()}] {symbol}: Datos insuficientes. Velas obtenidas: {len(klines_data) if klines_data else 0}, Requeridas: {min_required_klines}. Saltando análisis detallado.")
                 current_overall_rec = 'hold'
                 individual_recs = {'sma': 'N/A', 'rsi': 'N/A', 'bb': 'N/A'}
                 current_price = klines_data[-1]['y'] if klines_data and len(klines_data) > 0 else 0.0
+                
+                # Log detallado para casos de datos insuficientes
+                print(f"  [{datetime.now().isoformat()}] {symbol}: Señales Individuales: SMA: {individual_recs['sma']}, RSI: {individual_recs['rsi']}, BB: {individual_recs['bb']}. Recomendación General: {current_overall_rec}")
+
             else:
                 closing_prices = [p['y'] for p in klines_data]
                 current_price = closing_prices[-1]
@@ -411,6 +421,10 @@ async def scheduled_analysis_job(symbols):
                 combined_signals = get_combined_signals(sma_short, sma_long, rsi, bollinger_bands, closing_prices)
                 current_overall_rec = combined_signals['overall']
                 individual_recs = {'sma': combined_signals['sma'], 'rsi': combined_signals['rsi'], 'bb': combined_signals['bb']}
+                
+                # Log detallado para el análisis completo
+                print(f"  [{datetime.now().isoformat()}] {symbol}: Velas obtenidas: {len(klines_data)}. Señales Individuales: SMA: {individual_recs['sma']}, RSI: {individual_recs['rsi']}, BB: {individual_recs['bb']}. Conteo: Compra: {combined_signals['buy_count']}, Venta: {combined_signals['sell_count']}, N/A: {combined_signals['na_count']}. Recomendación General: {current_overall_rec}")
+
 
             # Update cache with full results for this symbol
             current_analysis_cache[symbol] = {
@@ -441,7 +455,7 @@ async def scheduled_analysis_job(symbols):
                 if last_saved_price != 0.0 and current_price is not None and current_price != 0:
                     percentage_change = abs(current_price - last_saved_price) / last_saved_price
                     has_significant_price_change = percentage_change >= PRICE_CHANGE_THRESHOLD
-                    print(f"  {symbol}: Price change: {(percentage_change*100):.2f}% (Threshold: {PRICE_CHANGE_THRESHOLD*100:.0f}%), Time passed: {has_time_passed}")
+                    print(f"  [{datetime.now().isoformat()}] {symbol}: % cambio precio: {(percentage_change*100):.2f}% (Umbral: {PRICE_CHANGE_THRESHOLD*100:.0f}%), Tiempo pasado: {has_time_passed}")
                 else:
                      has_significant_price_change = True # If no previous price, save it
 
@@ -449,7 +463,7 @@ async def scheduled_analysis_job(symbols):
                     should_save = True
             else: # First recommendation for this symbol
                 should_save = True
-                print(f"  {symbol}: First recommendation, saving.")
+                print(f"  [{datetime.now().isoformat()}] {symbol}: Primera recomendación, guardando.")
 
             if should_save:
                 last_prev_rec = last_rec_info.get('recommendation', 'N/A') if last_rec_info else 'N/A'
