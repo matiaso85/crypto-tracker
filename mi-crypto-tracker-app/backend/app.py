@@ -9,7 +9,7 @@ import httpx
 import sys # Importar sys para manejar el bucle de eventos
 
 app = Flask(__name__)
-# CORREGIDO: Configuración explícita de CORS para permitir todas las solicitudes de origen
+# Configuración explícita de CORS para permitir todas las solicitudes de origen
 CORS(app, resources={r"/*": {"origins": "*"}})
 
 # --- BACKEND CONFIGURATION ---
@@ -93,43 +93,93 @@ def update_last_recommendation_file(symbol, timestamp_iso, recommendation, sma_r
         writer.writeheader()
         writer.writerows(updated_rows)
 
-# --- NEW FUNCTION: Get ALL KuCoin Symbols ---
-async def get_all_kucoin_symbols():
-    """Fetches all tradable symbols from the KuCoin API, filtering for USDT/USDC pairs."""
-    url = "https://api.kucoin.com/api/v1/symbols"
-    print(f"[{datetime.now().isoformat()}] Fetching all symbols from KuCoin API: {url}")
+# --- NEW FUNCTION: Get ALL KuCoin Tickers (for volume data) ---
+async def get_all_kucoin_tickers():
+    """Fetches all market tickers from the KuCoin API to get volume data."""
+    url = "https://api.kucoin.com/api/v1/market/allTickers"
+    print(f"[{datetime.now().isoformat()}] Fetching all tickers from KuCoin API: {url}")
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(url, timeout=15.0)
             response.raise_for_status()
 
             data = response.json()
-
-            if not data or not data.get('data') or not isinstance(data['data'], list):
-                raise ValueError("KuCoin API for symbols returned invalid or no data.")
-
-            filtered_symbols = []
-            for item in data['data']:
-                if item.get('enableTrading') and item.get('baseCurrency') and item.get('quoteCurrency'):
-                    if item['quoteCurrency'] == 'USDT' or item['quoteCurrency'] == 'USDC':
-                        filtered_symbols.append(f"{item['baseCurrency']}-{item['quoteCurrency']}")
-
-            filtered_symbols = sorted(list(set(filtered_symbols)))
-            print(f"[{datetime.now().isoformat()}] Fetched {len(filtered_symbols)} symbols from KuCoin.")
-            print(f"[{datetime.now().isoformat()}] First 10 symbols: {filtered_symbols[:10]}")
-            return filtered_symbols
+            if not data or not data.get('data') or not data['data'].get('ticker') or not isinstance(data['data']['ticker'], list):
+                raise ValueError("KuCoin API for tickers returned invalid or no data.")
+            
+            # Create a dictionary for quick lookup by symbol
+            tickers_map = {ticker['symbol']: ticker for ticker in data['data']['ticker']}
+            print(f"[{datetime.now().isoformat()}] Fetched {len(tickers_map)} tickers from KuCoin.")
+            return tickers_map
 
     except httpx.HTTPStatusError as e:
-        print(f"HTTP Error fetching symbols from KuCoin: {e.response.status_code} - {e.response.text}")
+        print(f"HTTP Error fetching tickers from KuCoin: {e.response.status_code} - {e.response.text}")
+        return {}
+    except httpx.RequestError as e:
+        print(f"Network error fetching tickers from KuCoin: {e}")
+        return {}
+    except ValueError as e:
+        print(f"KuCoin data error for tickers: {e}")
+        return {}
+    except Exception as e:
+        print(f"Unexpected error fetching tickers from KuCoin: {e}")
+        return {}
+
+# --- NEW FUNCTION: Get ALL KuCoin Symbols (now with volume sorting) ---
+async def get_all_kucoin_symbols():
+    """
+    Fetches all tradable symbols from the KuCoin API, filters for USDT/USDC pairs,
+    sorts by 24h transaction volume, and returns the top 20 symbols.
+    """
+    url_symbols = "https://api.kucoin.com/api/v1/symbols"
+    print(f"[{datetime.now().isoformat()}] Fetching all symbols from KuCoin API: {url_symbols}")
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response_symbols = await client.get(url_symbols, timeout=15.0)
+            response_symbols.raise_for_status()
+            data_symbols = response_symbols.json()
+
+            if not data_symbols or not data_symbols.get('data') or not isinstance(data_symbols['data'], list):
+                raise ValueError("KuCoin API for symbols returned invalid or no data.")
+            
+            # Fetch all tickers for volume data
+            tickers_map = await get_all_kucoin_tickers()
+
+            tradable_pairs_with_volume = []
+            for item in data_symbols['data']:
+                symbol_name = f"{item['baseCurrency']}-{item['quoteCurrency']}"
+                if item.get('enableTrading') and item['quoteCurrency'] in ['USDT', 'USDC']:
+                    ticker_info = tickers_map.get(symbol_name)
+                    if ticker_info and ticker_info.get('volValue'): # Check if ticker data and volume exist
+                        try:
+                            volume = float(ticker_info['volValue'])
+                            tradable_pairs_with_volume.append({'symbol': symbol_name, 'volume': volume})
+                        except ValueError:
+                            print(f"[{datetime.now().isoformat()}] Could not parse volume for {symbol_name}: {ticker_info['volValue']}")
+                            continue # Skip if volume cannot be parsed
+            
+            # Sort by volume in descending order
+            tradable_pairs_with_volume.sort(key=lambda x: x['volume'], reverse=True)
+            
+            # Extract only the symbol names and limit to top 20
+            top_20_symbols = [pair['symbol'] for pair in tradable_pairs_with_volume[:20]]
+
+            print(f"[{datetime.now().isoformat()}] Fetched {len(tradable_pairs_with_volume)} tradable symbols with volume data.")
+            print(f"[{datetime.now().isoformat()}] Returning top 20 symbols by volume: {top_20_symbols}")
+            return top_20_symbols
+
+    except httpx.HTTPStatusError as e:
+        print(f"HTTP Error fetching symbols/tickers from KuCoin: {e.response.status_code} - {e.response.text}")
         return []
     except httpx.RequestError as e:
-        print(f"Network error fetching symbols from KuCoin: {e}")
+        print(f"Network error fetching symbols/tickers from KuCoin: {e}")
         return []
     except ValueError as e:
-        print(f"KuCoin data error for symbols: {e}")
+        print(f"KuCoin data error for symbols/tickers: {e}")
         return []
     except Exception as e:
-        print(f"Unexpected error fetching symbols from KuCoin: {e}")
+        print(f"Unexpected error fetching symbols/tickers from KuCoin: {e}")
         return []
 
 
