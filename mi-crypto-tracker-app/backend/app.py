@@ -729,7 +729,10 @@ async def scheduled_analysis_job(symbols):
                 elif current_overall_rec == 'sell' and latest_atr > 0: # Para una posición corta
                     stop_loss_price = round(current_price + (latest_atr * ATR_STOP_LOSS_MULTIPLIER), 2)
                     take_profit_price = round(current_price - (latest_atr * ATR_TAKE_PROFIT_MULTIPLIER), 2)
-                else: # Hold o N/A o ATR no válido
+                elif current_overall_rec == 'hold' and latest_atr > 0: # MODIFICADO: Calcular para 'hold' como si fuera una posición larga
+                    stop_loss_price = round(current_price - (latest_atr * ATR_STOP_LOSS_MULTIPLIER), 2)
+                    take_profit_price = round(current_price + (latest_atr * ATR_TAKE_PROFIT_MULTIPLIER), 2)
+                else: # N/A o ATR no válido
                     stop_loss_price = None
                     take_profit_price = None
 
@@ -777,7 +780,7 @@ async def scheduled_analysis_job(symbols):
                 else:
                      has_significant_price_change = True # If no previous price, save it
 
-                if has_time_passed or has_significant_price_change:
+                if has_time_passed or has_significant_change:
                     should_save = True
             else: # First recommendation for this symbol
                 should_save = True
@@ -991,7 +994,10 @@ async def get_latest_analysis(symbol):
             elif combined_signals['overall'] == 'sell' and latest_atr > 0: # Para una posición corta
                 stop_loss_price = round(current_price + (latest_atr * ATR_STOP_LOSS_MULTIPLIER), 2)
                 take_profit_price = round(current_price - (latest_atr * ATR_TAKE_PROFIT_MULTIPLIER), 2)
-            else: # Hold o N/A o ATR no válido
+            elif combined_signals['overall'] == 'hold' and latest_atr > 0: # MODIFICADO: Calcular para 'hold' como si fuera una posición larga
+                stop_loss_price = round(current_price - (latest_atr * ATR_STOP_LOSS_MULTIPLIER), 2)
+                take_profit_price = round(current_price + (latest_atr * ATR_TAKE_PROFIT_MULTIPLIER), 2)
+            else: # N/A o ATR no válido
                 stop_loss_price = None
                 take_profit_price = None
 
