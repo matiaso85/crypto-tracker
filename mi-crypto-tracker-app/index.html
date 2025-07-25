@@ -39,7 +39,7 @@
             flex: 1;
             min-width: 280px;
         }
-        #coin-select {
+        #coin-select, #interval-select { /* Añadido #interval-select */
             padding: 8px;
             border-radius: 4px;
             border: 1px solid #444;
@@ -382,6 +382,10 @@
                 <!-- Las opciones se llenarán dinámicamente por JavaScript -->
                 <option value="">Cargando criptomonedas...</option> 
             </select>
+            <label for="interval-select" style="margin-top: 10px;">Intervalo de Tiempo:</label> <!-- Nuevo label -->
+            <select id="interval-select"> <!-- Nuevo select -->
+                <!-- Las opciones se llenarán dinámicamente por JavaScript -->
+            </select>
             <div id="update-timer"></div>
             <p style="font-size: 0.8em; color: #888; margin-top: 10px;">
                 La lista de criptomonedas se carga dinámicamente desde KuCoin.
@@ -549,24 +553,25 @@
         const HISTORY_UPDATE_INTERVAL = 60000; // 1 minuto para actualizar el historial
 
         // Parámetros de los indicadores (ahora definidos en el backend, pero se mantienen aquí para referencia visual si se desea)
-        const SMA_SHORT_PERIOD = 10; // Antes 20
-        const SMA_LONG_PERIOD = 30;  // Antes 50
-        const BB_PERIOD = 15;        // Antes 20
+        const SMA_SHORT_PERIOD = 10; 
+        const SMA_LONG_PERIOD = 30;  
+        const BB_PERIOD = 15;        
         const BB_STD_DEV = 2;
         const RSI_PERIOD = 14;
-        const RSI_OVERBOUGHT = 65;   // Antes 70
-        const RSI_OVERSOLD = 35;     // Antes 30
+        const RSI_OVERBOUGHT = 65;   
+        const RSI_OVERSOLD = 35;     
         const STOCH_OVERBOUGHT = 80;
         const STOCH_OVERSOLD = 20;
 
 
         const coinSelect = document.getElementById('coin-select');
+        const intervalSelect = document.getElementById('interval-select'); // Nuevo
         const updateTimerDiv = document.getElementById('update-timer');
         const smaSignalDiv = document.getElementById('sma-signal');
         const rsiSignalDiv = document.getElementById('rsi-signal');
         const bbSignalDiv = document.getElementById('bb-signal');
-        const macdSignalDiv = document.getElementById('macd-signal'); // Nuevo
-        const stochSignalDiv = document.getElementById('stoch-signal'); // Nuevo
+        const macdSignalDiv = document.getElementById('macd-signal'); 
+        const stochSignalDiv = document.getElementById('stoch-signal'); 
         
         const buyList = document.getElementById('buy-list');
         const sellList = document.getElementById('sell-list');
@@ -586,11 +591,11 @@
         const toggleBbMiddle = document.getElementById('toggle-bb-middle');
         const toggleBbLower = document.getElementById('toggle-bb-lower');
         const toggleRsi = document.getElementById('toggle-rsi');
-        const toggleMacdLine = document.getElementById('toggle-macd-line'); // Nuevo
-        const toggleMacdSignal = document.getElementById('toggle-macd-signal'); // Nuevo
-        const toggleMacdHistogram = document.getElementById('toggle-macd-histogram'); // Nuevo
-        const toggleStochK = document.getElementById('toggle-stoch-k'); // Nuevo
-        const toggleStochD = document.getElementById('toggle-stoch-d'); // Nuevo
+        const toggleMacdLine = document.getElementById('toggle-macd-line'); 
+        const toggleMacdSignal = document.getElementById('toggle-macd-signal'); 
+        const toggleMacdHistogram = document.getElementById('toggle-macd-histogram'); 
+        const toggleStochK = document.getElementById('toggle-stoch-k'); 
+        const toggleStochD = document.getElementById('toggle-stoch-d'); 
 
 
         const allHistoryList = document.getElementById('all-history-list');
@@ -608,6 +613,9 @@
 
         let priceChartInstance, countdownInterval;
         let allCryptos = []; 
+        // Definir los intervalos disponibles para el frontend
+        const AVAILABLE_INTERVALS = ["1min", "5min", "15min", "30min", "1hour", "2hour", "4hour", "6hour", "12hour", "1day", "1week"];
+
 
         // Cachés para los datos del gráfico (ahora incluyen MACD y Stoch)
         let currentPriceDataCache = null;
@@ -615,8 +623,8 @@
         let currentSmaLongCache = null;
         let currentBollingerBandsCache = null;
         let currentRsiCache = null; 
-        let currentMacdDataCache = null; // Nuevo
-        let currentStochDataCache = null; // Nuevo
+        let currentMacdDataCache = null; 
+        let currentStochDataCache = null; 
 
         // ===================================================================================
         // --- INICIALIZACIÓN DE LA APLICACIÓN ---
@@ -626,7 +634,17 @@
         async function initDynamicCryptoList() {
             console.log("initDynamicCryptoList: Cargando lista de criptomonedas dinámicamente desde el backend.");
             coinSelect.innerHTML = '<option value="">Cargando monedas...</option>'; // Mostrar estado de carga
-            
+            intervalSelect.innerHTML = ''; // Limpiar opciones de intervalo
+
+            // Poblar el select de intervalos
+            AVAILABLE_INTERVALS.forEach(interval => {
+                const option = document.createElement('option');
+                option.value = interval;
+                option.textContent = interval;
+                intervalSelect.appendChild(option);
+            });
+            intervalSelect.value = KUCOIN_INTERVAL; // Seleccionar el intervalo por defecto (1hour)
+
             try {
                 const response = await fetch(`${BACKEND_URL}/get_available_symbols`);
                 if (!response.ok) {
@@ -673,12 +691,13 @@
         /**
          * Obtiene los últimos datos de análisis (klines y señales) para una criptomoneda específica desde el backend.
          * @param {string} symbol - El símbolo de la criptomoneda.
+         * @param {string} interval - El intervalo de tiempo (ej. "1hour", "4hour").
          * @returns {object} Un objeto con klines, indicadores y señales, o null si hay error.
          */
-        async function getLatestAnalysisFromBackend(symbol) {
-            console.log(`Frontend: Solicitando análisis más reciente de ${symbol} al backend.`);
+        async function getLatestAnalysisFromBackend(symbol, interval) {
+            console.log(`Frontend: Solicitando análisis más reciente de ${symbol} con intervalo ${interval} al backend.`);
             try {
-                const response = await fetch(`${BACKEND_URL}/get_latest_analysis/${symbol}`);
+                const response = await fetch(`${BACKEND_URL}/get_latest_analysis/${symbol}?interval=${interval}`);
                 if (!response.ok) {
                     const errorText = await response.text();
                     throw new Error(`Error HTTP al obtener análisis del backend: ${response.status} - ${response.statusText}. Detalles: ${errorText}`);
@@ -821,17 +840,17 @@
             smaSignalDiv.classList.remove('alert-buy', 'alert-sell');
             rsiSignalDiv.classList.remove('alert-buy', 'alert-sell');
             bbSignalDiv.classList.remove('alert-buy', 'alert-sell');
-            macdSignalDiv.classList.remove('alert-buy', 'alert-sell'); // Nuevo
-            stochSignalDiv.classList.remove('alert-buy', 'alert-sell'); // Nuevo
+            macdSignalDiv.classList.remove('alert-buy', 'alert-sell'); 
+            stochSignalDiv.classList.remove('alert-buy', 'alert-sell'); 
 
             // Usar directamente las señales recibidas del backend
             const signals = {
                 sma: analysisData.sma,
                 rsi: analysisData.rsi,
                 bb: analysisData.bb,
-                macd: analysisData.macd, // Nuevo
-                stoch: analysisData.stoch, // Nuevo
-                overall: analysisData.overall_rec // overall_rec es la recomendación combinada
+                macd: analysisData.macd, 
+                stoch: analysisData.stoch, 
+                overall: analysisData.overall_rec 
             };
 
             // SMA
@@ -1074,8 +1093,8 @@
             smaSignalDiv.textContent = 'Cargando...'; smaSignalDiv.className = 'signal hold';
             rsiSignalDiv.textContent = 'Cargando...'; rsiSignalDiv.className = 'signal hold';
             bbSignalDiv.textContent = 'Cargando...'; bbSignalDiv.className = 'signal hold';
-            macdSignalDiv.textContent = 'Cargando...'; macdSignalDiv.className = 'signal hold'; // Nuevo
-            stochSignalDiv.textContent = 'Cargando...'; stochSignalDiv.className = 'signal hold'; // Nuevo
+            macdSignalDiv.textContent = 'Cargando...'; macdSignalDiv.className = 'signal hold'; 
+            stochSignalDiv.textContent = 'Cargando...'; stochSignalDiv.className = 'signal hold'; 
             updateTimerDiv.textContent = "";
 
             // Resetear SL/TP
@@ -1087,6 +1106,8 @@
             priceChartCanvas.style.display = 'block';
 
             const selectedSymbol = coinSelect.value;
+            const selectedInterval = intervalSelect.value; // Obtener el intervalo seleccionado
+
             if (!selectedSymbol) {
                 console.warn("No hay criptomoneda seleccionada.");
                 if (priceChartInstance) priceChartInstance.destroy();
@@ -1095,17 +1116,17 @@
                 priceNoDataMessage.style.display = 'flex'; 
                 return;
             }
-            console.log(`runSelectedCryptoAnalysis: Solicitando análisis de ${selectedSymbol} al backend.`);
+            console.log(`runSelectedCryptoAnalysis: Solicitando análisis de ${selectedSymbol} con intervalo ${selectedInterval} al backend.`);
 
-            const analysisData = await getLatestAnalysisFromBackend(selectedSymbol); 
+            const analysisData = await getLatestAnalysisFromBackend(selectedSymbol, selectedInterval); // Pasar el intervalo
             
             if (!analysisData || !analysisData.klines || analysisData.klines.length === 0) {
                 console.error(`runSelectedCryptoAnalysis: No se recibieron datos de análisis para ${selectedSymbol} del backend.`);
                 smaSignalDiv.textContent = 'Error: No hay datos.';
                 rsiSignalDiv.textContent = 'Error: No hay datos.';
                 bbSignalDiv.textContent = 'Error: No hay datos.';
-                macdSignalDiv.textContent = 'Error: No hay datos.'; // Nuevo
-                stochSignalDiv.textContent = 'Error: No hay datos.'; // Nuevo
+                macdSignalDiv.textContent = 'Error: No hay datos.'; 
+                stochSignalDiv.textContent = 'Error: No hay datos.'; 
                 updateTimerDiv.textContent = "Datos no disponibles del backend";
                 
                 // Aseguramos que los caches sean nulls/vacíos si no hay datos
@@ -1114,8 +1135,8 @@
                 currentSmaLongCache = null;
                 currentBollingerBandsCache = null;
                 currentRsiCache = null;
-                currentMacdDataCache = null; // Nuevo
-                currentStochDataCache = null; // Nuevo
+                currentMacdDataCache = null; 
+                currentStochDataCache = null; 
 
                 if (priceChartInstance) priceChartInstance.destroy();
                 priceChartCanvas.style.display = 'none';
@@ -1129,8 +1150,8 @@
             currentSmaLongCache = analysisData.sma_long;
             currentBollingerBandsCache = analysisData.bb_bands;
             currentRsiCache = analysisData.rsi_data; 
-            currentMacdDataCache = analysisData.macd_data; // Nuevo
-            currentStochDataCache = analysisData.stoch_data; // Nuevo
+            currentMacdDataCache = analysisData.macd_data; 
+            currentStochDataCache = analysisData.stoch_data; 
             
             console.log(`runSelectedCryptoAnalysis: Renderizando gráficos para ${selectedSymbol} con datos del backend.`);
             renderPriceChart(currentPriceDataCache, currentSmaShortCache, currentSmaLongCache, currentBollingerBandsCache, currentRsiCache, currentMacdDataCache, currentStochDataCache);
@@ -1171,7 +1192,8 @@
 
             for (const symbol of symbolsToDisplay) {
                 // Obtener el análisis más reciente para cada símbolo directamente de la cache del backend
-                const analysisData = await getLatestAnalysisFromBackend(symbol); 
+                // Nota: Esta llamada no usa el intervalo seleccionado por el usuario, siempre usa el por defecto del backend.
+                const analysisData = await getLatestAnalysisFromBackend(symbol, KUCOIN_INTERVAL); 
                 
                 if (analysisData && analysisData.overall_rec) {
                     const item = {
@@ -1203,7 +1225,7 @@
 
         document.addEventListener('DOMContentLoaded', async () => {
             console.log("DOM Cargado. Iniciando aplicación.");
-            // 1. Cargar la lista dinámica de criptos desde el backend
+            // 1. Cargar la lista dinámica de criptos y poblar el selector de intervalos
             await initDynamicCryptoList(); 
 
             if (allCryptos.length > 0) {
@@ -1223,6 +1245,7 @@
         });
 
         coinSelect.addEventListener('change', runSelectedCryptoAnalysis);
+        intervalSelect.addEventListener('change', runSelectedCryptoAnalysis); // Nuevo event listener para el cambio de intervalo
 
         const indicatorCheckboxes = document.querySelectorAll('#indicator-selection-panel input[type="checkbox"]');
         indicatorCheckboxes.forEach(checkbox => {
