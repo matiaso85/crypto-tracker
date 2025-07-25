@@ -13,8 +13,27 @@ app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 
 # --- BACKEND CONFIGURATION ---
-KUCOIN_INTERVAL = "1hour"
+KUCOIN_INTERVAL = "1hour" # Intervalo por defecto para el job programado
 KUCOIN_LIMIT = 200
+
+# NUEVO: Intervalos disponibles y sus equivalencias para cálculos de periodos
+KUCOIN_INTERVALS_MAP = {
+    "1min": {"hours": 1/60, "days": 1/(60*24), "weeks": 1/(60*24*7)},
+    "3min": {"hours": 3/60, "days": 3/(60*24), "weeks": 3/(60*24*7)},
+    "5min": {"hours": 5/60, "days": 5/(60*24), "weeks": 5/(60*24*7)},
+    "15min": {"hours": 15/60, "days": 15/(60*24), "weeks": 15/(60*24*7)},
+    "30min": {"hours": 30/60, "days": 30/(60*24), "weeks": 30/(60*24*7)},
+    "1hour": {"hours": 1, "days": 1/24, "weeks": 1/(24*7)},
+    "2hour": {"hours": 2, "days": 2/24, "weeks": 2/(24*7)},
+    "4hour": {"hours": 4, "days": 4/24, "weeks": 4/(24*7)},
+    "6hour": {"hours": 6, "days": 6/24, "weeks": 6/(24*7)},
+    "8hour": {"hours": 8, "days": 8/24, "weeks": 8/(24*7)},
+    "12hour": {"hours": 12, "days": 12/24, "weeks": 12/(24*7)},
+    "1day": {"hours": 24, "days": 1, "weeks": 1/7},
+    "1week": {"hours": 24*7, "days": 7, "weeks": 1},
+    "1month": {"hours": 24*30, "days": 30, "weeks": 30/7}, # Aproximado
+}
+
 
 SAVE_REC_TO_BACKEND_INTERVAL = timedelta(hours=1)
 PRICE_CHANGE_THRESHOLD = 0.03
@@ -225,7 +244,7 @@ async def get_kucoin_klines(symbol, interval=KUCOIN_INTERVAL, limit=KUCOIN_LIMIT
             data = response.json()
 
             if not data or not data.get('data') or not isinstance(data['data'], list) or len(data['data']) == 0:
-                print(f"[{datetime.now().isoformat()}] No candlestick data returned for {kucoin_symbol}.")
+                print(f"[{datetime.now().isoformat()}] No candlestick data returned for {kucoin_symbol} with interval {interval}.")
                 return [] # Return empty list instead of None
             
             formatted_klines = []
@@ -240,16 +259,16 @@ async def get_kucoin_klines(symbol, interval=KUCOIN_INTERVAL, limit=KUCOIN_LIMIT
             return formatted_klines[::-1] # Reverse to have oldest first
 
     except httpx.HTTPStatusError as e:
-        print(f"KuCoin HTTP Error for {kucoin_symbol}: {e.response.status_code} - {e.response.text}")
+        print(f"KuCoin HTTP Error for {kucoin_symbol} ({interval}): {e.response.status_code} - {e.response.text}")
         return [] # Return empty list instead of None
     except httpx.RequestError as e:
-        print(f"Network error connecting to KuCoin for {kucoin_symbol}: {e}")
+        print(f"Network error connecting to KuCoin for {kucoin_symbol} ({interval}): {e}")
         return [] # Return empty list instead of None
     except ValueError as e:
-        print(f"KuCoin data error for {kucoin_symbol}: {e}")
+        print(f"KuCoin data error for {kucoin_symbol} ({interval}): {e}")
         return [] # Return empty list instead of None
     except Exception as e:
-        print(f"Unexpected error fetching KuCoin data for {kucoin_symbol}: {e}")
+        print(f"Unexpected error fetching KuCoin data for {kucoin_symbol} ({interval}): {e}")
         return [] # Return empty list instead of None
 
 
@@ -730,6 +749,8 @@ async def scheduled_analysis_job(symbols):
                     stop_loss_price = round(current_price + (latest_atr * ATR_STOP_LOSS_MULTIPLIER), 2)
                     take_profit_price = round(current_price - (latest_atr * ATR_TAKE_PROFIT_MULTIPLIER), 2)
                 elif current_overall_rec == 'hold' and latest_atr > 0: # MODIFICADO: Calcular para 'hold' como si fuera una posición larga
+                    # Para 'hold', asumimos que el usuario podría estar en una posición larga o simplemente buscando puntos de interés.
+                    # Calcular SL/TP como si fuera una posición de compra es un enfoque razonable para "mantener".
                     stop_loss_price = round(current_price - (latest_atr * ATR_STOP_LOSS_MULTIPLIER), 2)
                     take_profit_price = round(current_price + (latest_atr * ATR_TAKE_PROFIT_MULTIPLIER), 2)
                 else: # N/A o ATR no válido
@@ -950,7 +971,13 @@ async def get_latest_analysis(symbol):
     take_profit_price = None
 
     try:
-        klines_data = await get_kucoin_klines(symbol) # Esta función ahora devuelve [] en lugar de None
+        # NUEVO: Obtener el intervalo de la solicitud del frontend
+        interval_param = request.args.get('interval', KUCOIN_INTERVAL, type=str)
+        if interval_param not in KUCOIN_INTERVALS_MAP:
+            print(f"[{datetime.now().isoformat()}] Invalid interval parameter: {interval_param}. Using default {KUCOIN_INTERVAL}.")
+            interval_param = KUCOIN_INTERVAL # Usar el intervalo por defecto si el provided es inválido
+
+        klines_data = await get_kucoin_klines(symbol, interval=interval_param) # Pasar el intervalo a la función de klines
 
         # Definir los periodos de los indicadores aquí para usarlos en min_required_klines
         SMA_SHORT_PERIOD = 10 
@@ -1095,7 +1122,8 @@ def initial_setup():
                 max_instances=1 # Ensure only one instance runs at a time
             )
 
-            # Execute the scheduled task at startup to populate the cache as soon as possible
+            # Ejecutar la tarea programada al inicio para poblar la cache lo antes posible
+            # Se ejecuta solo si hay símbolos para evitar errores.
             if SYMBOLS_TO_MONITOR:
                 print(f"[{datetime.now().isoformat()}] Running initial scheduled analysis job.")
                 loop.run_until_complete(scheduled_analysis_job(SYMBOLS_TO_MONITOR))
@@ -1104,10 +1132,6 @@ def initial_setup():
         print(f"[{datetime.now().isoformat()}] Error during initial scheduler setup or symbol fetch: {e}")
         print("Scheduler might not be fully operational or symbols list is empty.")
 
-# Call initial_setup when the Flask app starts
-# This ensures it runs only once when the application is loaded
-with app.app_context():
-    initial_setup()
 
 if __name__ == '__main__':
     print("Running Flask app in __main__ block (for local development).")
