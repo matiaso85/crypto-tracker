@@ -152,7 +152,7 @@ async def get_all_kucoin_tickers():
 # --- NEW FUNCTION: Get ALL KuCoin Symbols (now with volume sorting) ---
 async def get_all_kucoin_symbols():
     """
-    Fetches all tradable symbols from the KuCoin API, filters for USDT/USDC pairs,
+    Fetches all tradable symbols from the KuCoin API, filters for USDT pairs,
     sorts by 24h transaction volume, and returns the top 20 symbols.
     """
     url_symbols = "https://api.kucoin.com/api/v1/symbols"
@@ -173,7 +173,8 @@ async def get_all_kucoin_symbols():
             tradable_pairs_with_volume = []
             for item in data_symbols['data']:
                 symbol_name = f"{item['baseCurrency']}-{item['quoteCurrency']}"
-                if item.get('enableTrading') and item['quoteCurrency'] in ['USDT', 'USDC']:
+                # MODIFICADO: Filtrar solo por USDT
+                if item.get('enableTrading') and item['quoteCurrency'] == 'USDT':
                     ticker_info = tickers_map.get(symbol_name)
                     if ticker_info and ticker_info.get('volValue'): # Check if ticker data and volume exist
                         try:
