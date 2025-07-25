@@ -220,8 +220,9 @@ async def get_kucoin_klines(symbol, interval=KUCOIN_INTERVAL, limit=KUCOIN_LIMIT
             data = response.json()
 
             if not data or not data.get('data') or not isinstance(data['data'], list) or len(data['data']) == 0:
-                raise ValueError(f"KuCoin API for {kucoin_symbol} returned valid response but no candlestick data.")
-
+                print(f"[{datetime.now().isoformat()}] No candlestick data returned for {kucoin_symbol}.")
+                return None # Return None if no data
+            
             formatted_prices = []
             for kline in data['data']:
                 formatted_prices.append({
@@ -361,7 +362,11 @@ def calculate_macd(data, fast_period, slow_period, signal_period):
             macd_line.append(None)
 
     # Calculate signal line (EMA of MACD line)
-    signal_line_raw = calculate_ema([m for m in macd_line if m is not None], signal_period)
+    # Filter out None values before calculating EMA for signal line
+    valid_macd_line_for_signal = [m for m in macd_line if m is not None]
+    signal_line_raw = calculate_ema(valid_macd_line_for_signal, signal_period)
+    
+    # Pad signal_line with None values at the beginning to match original data length
     signal_line = [None] * (len(macd_line) - len(signal_line_raw)) + [s['y'] for s in signal_line_raw]
 
     histogram = []
@@ -389,8 +394,9 @@ def calculate_stochastic_oscillator(data, k_period, d_period):
         if i < k_period - 1:
             k_line.append(None)
         else:
-            period_low = min(data[i - k_period + 1 : i + 1])
-            period_high = max(data[i - k_period + 1 : i + 1])
+            period_data = data[i - k_period + 1 : i + 1]
+            period_low = min(period_data)
+            period_high = max(period_data)
             current_close = data[i]
 
             if (period_high - period_low) != 0:
@@ -400,7 +406,11 @@ def calculate_stochastic_oscillator(data, k_period, d_period):
             k_line.append(k)
     
     # Calculate %D line (SMA of %K line)
-    d_line_raw = calculate_sma([k for k in k_line if k is not None], d_period)
+    # Filter out None values before calculating SMA for D line
+    valid_k_line_for_d = [k for k in k_line if k is not None]
+    d_line_raw = calculate_sma(valid_k_line_for_d, d_period)
+    
+    # Pad d_line with None values at the beginning to match original data length
     d_line = [None] * (len(k_line) - len(d_line_raw)) + [d['y'] for d in d_line_raw]
 
     # Format for Chart.js
@@ -570,6 +580,11 @@ async def scheduled_analysis_job(symbols):
     STOCH_MAX_PERIOD = STOCH_K_PERIOD + STOCH_D_PERIOD
 
     for symbol in symbols:
+        # Inicializar stop_loss_price y take_profit_price aquí para asegurar que siempre estén definidos
+        stop_loss_price = None
+        take_profit_price = None
+        current_price = 0.0 # Inicializar current_price también
+
         try:
             print(f"[{datetime.now().isoformat()}] Analyzing {symbol}...")
             klines_data = await get_kucoin_klines(symbol)
@@ -582,14 +597,14 @@ async def scheduled_analysis_job(symbols):
                 print(f"  [{datetime.now().isoformat()}] {symbol}: Datos insuficientes. Velas obtenidas: {len(klines_data) if klines_data else 0}, Requeridas: {min_required_klines}. Saltando análisis detallado.")
                 current_overall_rec = 'hold'
                 individual_recs = {'sma': 'N/A', 'rsi': 'N/A', 'bb': 'N/A', 'macd': 'N/A', 'stoch': 'N/A'} # Actualizado
-                current_price = klines_data[-1]['y'] if klines_data and len(klines_data) > 0 else 0.0
+                # current_price, stop_loss_price, take_profit_price ya están inicializados a 0.0/None
                 
                 # Log detallado para casos de datos insuficientes
                 print(f"  [{datetime.now().isoformat()}] {symbol}: Señales Individuales: SMA: {individual_recs['sma']}, RSI: {individual_recs['rsi']}, BB: {individual_recs['bb']}, MACD: {individual_recs['macd']}, Stoch: {individual_recs['stoch']}. Recomendación General: {current_overall_rec}")
 
             else:
                 closing_prices = [p['y'] for p in klines_data]
-                current_price = closing_prices[-1]
+                current_price = closing_prices[-1] # Ahora es seguro acceder
 
                 # Se pasan los periodos actualizados a las funciones de cálculo
                 sma_short = calculate_sma(closing_prices, SMA_SHORT_PERIOD)
