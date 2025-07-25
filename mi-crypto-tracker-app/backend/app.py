@@ -823,6 +823,20 @@ async def get_latest_analysis(symbol):
         return jsonify(current_analysis_cache[symbol]), 200
 
     print(f"[{datetime.now().isoformat()}] Cache miss for {symbol}, trying to fetch live. (This should be rare if scheduler runs)")
+    
+    # Inicializar estas variables con valores seguros al principio del bloque try
+    klines_data = None
+    sma_short = []
+    sma_long = []
+    bollinger_bands = {'middle':[],'upper':[],'lower':[]}
+    rsi = []
+    macd_data = {'macd_line': [], 'signal_line': [], 'histogram': []}
+    stoch_data = {'k_line': [], 'd_line': []}
+    combined_signals = {'overall': 'hold', 'sma': 'N/A', 'rsi': 'N/A', 'bb': 'N/A', 'macd': 'N/A', 'stoch': 'N/A'}
+    current_price = 0.0
+    stop_loss_price = None
+    take_profit_price = None
+
     try:
         klines_data = await get_kucoin_klines(symbol)
 
@@ -835,30 +849,27 @@ async def get_latest_analysis(symbol):
         STOCH_MAX_PERIOD = STOCH_K_PERIOD + STOCH_D_PERIOD
 
         min_required_klines = max(SMA_SHORT_PERIOD, SMA_LONG_PERIOD, RSI_PERIOD, BB_PERIOD, MACD_MAX_PERIOD, STOCH_MAX_PERIOD) + 1
+        
         if not klines_data or len(klines_data) < min_required_klines:
             print(f"[{datetime.now().isoformat()}] Insufficient data for {symbol} on live fetch for frontend. Returning empty.")
-            return jsonify({
-                'overall_rec': 'hold', 'sma': 'N/A', 'rsi': 'N/A', 'bb': 'N/A', 'macd': 'N/A', 'stoch': 'N/A',
-                'klines': [], 'sma_short': [], 'sma_long': [], 'bb_bands': {'middle':[],'upper':[],'lower':[]}, 'rsi_data': [],
-                'macd_data': {'macd_line': [], 'signal_line': [], 'histogram': []}, 'stoch_data': {'k_line': [], 'd_line': []},
-                'stop_loss_price': None, 'take_profit_price': None
-            }), 200
+            # Las variables ya están inicializadas a None/empty, así que podemos devolverlas directamente
+            pass # No hacer nada aquí, las variables ya tienen los valores por defecto
+        else:
+            closing_prices = [p['y'] for p in klines_data]
+            current_price = closing_prices[-1]
 
-        closing_prices = [p['y'] for p in klines_data]
+            # Se pasan los periodos actualizados a las funciones de cálculo
+            sma_short = calculate_sma(closing_prices, SMA_SHORT_PERIOD)
+            sma_long = calculate_sma(closing_prices, SMA_LONG_PERIOD)
+            bollinger_bands = calculate_bollinger_bands(closing_prices, BB_PERIOD, 2)
+            rsi = calculate_rsi(closing_prices, RSI_PERIOD)
+            macd_data = calculate_macd(closing_prices, MACD_FAST_PERIOD, MACD_SLOW_PERIOD, MACD_SIGNAL_PERIOD)
+            stoch_data = calculate_stochastic_oscillator(closing_prices, STOCH_K_PERIOD, STOCH_D_PERIOD)
 
-        # Se pasan los periodos actualizados a las funciones de cálculo
-        sma_short = calculate_sma(closing_prices, SMA_SHORT_PERIOD)
-        sma_long = calculate_sma(closing_prices, SMA_LONG_PERIOD)
-        bollinger_bands = calculate_bollinger_bands(closing_prices, BB_PERIOD, 2)
-        rsi = calculate_rsi(closing_prices, RSI_PERIOD)
-        macd_data = calculate_macd(closing_prices, MACD_FAST_PERIOD, MACD_SLOW_PERIOD, MACD_SIGNAL_PERIOD)
-        stoch_data = calculate_stochastic_oscillator(closing_prices, STOCH_K_PERIOD, STOCH_D_PERIOD)
-
-        combined_signals = get_combined_signals(sma_short, sma_long, rsi, bollinger_bands, macd_data, stoch_data, closing_prices)
-
-        current_price = closing_prices[-1] if closing_prices else 0.0
-        stop_loss_price = round(current_price * (1 - STOP_LOSS_PERCENTAGE), 2)
-        take_profit_price = round(current_price * (1 + TAKE_PROFIT_PERCENTAGE), 2)
+            combined_signals = get_combined_signals(sma_short, sma_long, rsi, bollinger_bands, macd_data, stoch_data, closing_prices)
+            
+            stop_loss_price = round(current_price * (1 - STOP_LOSS_PERCENTAGE), 2)
+            take_profit_price = round(current_price * (1 + TAKE_PROFIT_PERCENTAGE), 2)
 
         response_data = {
             'overall_rec': combined_signals['overall'],
@@ -867,7 +878,7 @@ async def get_latest_analysis(symbol):
             'bb': combined_signals['bb'],
             'macd': combined_signals['macd'],
             'stoch': combined_signals['stoch'],
-            'klines': klines_data,
+            'klines': klines_data if klines_data else [], # Asegurarse de que sea una lista vacía si es None
             'sma_short': sma_short,
             'sma_long': sma_long,
             'bb_bands': bollinger_bands,
