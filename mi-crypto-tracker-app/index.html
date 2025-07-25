@@ -6,7 +6,7 @@
     <title>Crypto Tracker Online (Backend Driven)</title>
     <style>
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            font-family: -apple-system, BlinkMacMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
             background-color: #121212;
             color: #e0e0e0;
             display: flex;
@@ -164,6 +164,7 @@
             border-radius: 4px;
             font-size: 1em;
             display: flex;
+            flex-direction: column; /* Para apilar símbolo y SL/TP */
             justify-content: center;
             align-items: center;
             font-weight: bold;
@@ -174,6 +175,12 @@
         .col-buy li { border-left: 4px solid #28a745; }
         .col-sell li { border-left: 4px solid #dc3545; }
         .col-hold li { border-left: 4px solid #6c757d; }
+        .opportunity-details {
+            font-size: 0.8em;
+            font-weight: normal;
+            color: #aaa;
+            margin-top: 5px;
+        }
 
         #indicator-selection-panel {
             background-color: #1e1e1e;
@@ -318,6 +325,48 @@
             font-size: 1em;
             color: #e0e0e0;
         }
+
+        /* Nuevo panel de Stop-Loss/Take-Profit */
+        #risk-management-panel {
+            background-color: #1e1e1e;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            margin-top: 20px;
+            width: 95%;
+            max-width: 1200px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-around;
+            gap: 20px;
+            align-items: center;
+        }
+        .risk-level {
+            text-align: center;
+            padding: 10px;
+            border-radius: 6px;
+            background-color: #2a2a2a;
+            flex: 1;
+            min-width: 180px;
+        }
+        .risk-level h3 {
+            margin-top: 0;
+            margin-bottom: 5px;
+            color: #e0e0e0;
+            font-size: 1.1em;
+        }
+        .risk-level p {
+            margin: 0;
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #36a2eb; /* Color por defecto */
+        }
+        .risk-level.stop-loss p {
+            color: #dc3545; /* Rojo para Stop-Loss */
+        }
+        .risk-level.take-profit p {
+            color: #28a745; /* Verde para Take-Profit */
+        }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
@@ -362,10 +411,29 @@
                 </div>
             </div>
             <p style="font-size: 0.8em; color: #888; margin-top: 10px; text-align: center;">
-                Recomendaciones basadas en análisis técnico (SMA, RSI, BB) para todas las criptomonedas listadas.
+                Recomendaciones basadas en análisis técnico (SMA, RSI, BB, MACD, Stoch) para todas las criptomonedas listadas.
                 La actualización de esta sección se realiza progresivamente.
             </p>
         </div>
+    </div>
+
+    <!-- Panel de Stop-Loss y Take-Profit -->
+    <div id="risk-management-panel" class="container">
+        <div class="risk-level">
+            <h3>Precio Actual</h3>
+            <p id="current-price-display">--</p>
+        </div>
+        <div class="risk-level stop-loss">
+            <h3>Stop-Loss Sugerido</h3>
+            <p id="stop-loss-display">--</p>
+        </div>
+        <div class="risk-level take-profit">
+            <h3>Take-Profit Sugerido</h3>
+            <p id="take-profit-display">--</p>
+        </div>
+        <p style="font-size: 0.8em; color: #888; margin-top: 10px; text-align: center; width: 100%;">
+            Estos niveles son sugerencias basadas en porcentajes fijos y no garantizan resultados.
+        </p>
     </div>
 
     <!-- Panel de Selección de Indicadores -->
@@ -394,12 +462,34 @@
             <input type="checkbox" id="toggle-rsi" checked>
             <label for="toggle-rsi">RSI</label>
         </div>
+        <div>
+            <input type="checkbox" id="toggle-macd-line" checked>
+            <label for="toggle-macd-line">MACD Línea</label>
+        </div>
+        <div>
+            <input type="checkbox" id="toggle-macd-signal" checked>
+            <label for="toggle-macd-signal">MACD Señal</label>
+        </div>
+        <div>
+            <input type="checkbox" id="toggle-macd-histogram" checked>
+            <label for="toggle-macd-histogram">MACD Histograma</label>
+        </div>
+        <div>
+            <input type="checkbox" id="toggle-stoch-k" checked>
+            <label for="toggle-stoch-k">Stoch %K</label>
+        </div>
+        <div>
+            <input type="checkbox" id="toggle-stoch-d" checked>
+            <label for="toggle-stoch-d">Stoch %D</label>
+        </div>
     </div>
 
     <div id="signals-panel" class="container">
         <div id="sma-signal" class="signal hold">Cargando...</div>
         <div id="rsi-signal" class="signal hold">Cargando...</div>
         <div id="bb-signal" class="signal hold">Cargando...</div>
+        <div id="macd-signal" class="signal hold">Cargando...</div> <!-- Nuevo -->
+        <div id="stoch-signal" class="signal hold">Cargando...</div> <!-- Nuevo -->
     </div>
     
     <div id="price-chart-container" class="chart-container container">
@@ -458,19 +548,25 @@
         const UPDATE_INTERVAL_ALL_CRYPTOS = 5 * 60 * 1000; // 5 minutos para actualizar TODAS las oportunidades
         const HISTORY_UPDATE_INTERVAL = 60000; // 1 minuto para actualizar el historial
 
-        const SMA_SHORT_PERIOD = 20;
-        const SMA_LONG_PERIOD = 50;
-        const BB_PERIOD = 20;
+        // Parámetros de los indicadores (ahora definidos en el backend, pero se mantienen aquí para referencia visual si se desea)
+        const SMA_SHORT_PERIOD = 10; // Antes 20
+        const SMA_LONG_PERIOD = 30;  // Antes 50
+        const BB_PERIOD = 15;        // Antes 20
         const BB_STD_DEV = 2;
         const RSI_PERIOD = 14;
-        const RSI_OVERBOUGHT = 70;
-        const RSI_OVERSOLD = 30;
+        const RSI_OVERBOUGHT = 65;   // Antes 70
+        const RSI_OVERSOLD = 35;     // Antes 30
+        const STOCH_OVERBOUGHT = 80;
+        const STOCH_OVERSOLD = 20;
+
 
         const coinSelect = document.getElementById('coin-select');
         const updateTimerDiv = document.getElementById('update-timer');
         const smaSignalDiv = document.getElementById('sma-signal');
         const rsiSignalDiv = document.getElementById('rsi-signal');
         const bbSignalDiv = document.getElementById('bb-signal');
+        const macdSignalDiv = document.getElementById('macd-signal'); // Nuevo
+        const stochSignalDiv = document.getElementById('stoch-signal'); // Nuevo
         
         const buyList = document.getElementById('buy-list');
         const sellList = document.getElementById('sell-list');
@@ -479,12 +575,23 @@
         const priceChartCanvas = document.getElementById('priceChart');
         const priceNoDataMessage = document.getElementById('price-no-data');
 
+        // Nuevos elementos para Stop-Loss/Take-Profit
+        const currentPriceDisplay = document.getElementById('current-price-display');
+        const stopLossDisplay = document.getElementById('stop-loss-display');
+        const takeProfitDisplay = document.getElementById('take-profit-display');
+
         const toggleSmaShort = document.getElementById('toggle-sma-short');
         const toggleSmaLong = document.getElementById('toggle-sma-long');
         const toggleBbUpper = document.getElementById('toggle-bb-upper');
         const toggleBbMiddle = document.getElementById('toggle-bb-middle');
         const toggleBbLower = document.getElementById('toggle-bb-lower');
         const toggleRsi = document.getElementById('toggle-rsi');
+        const toggleMacdLine = document.getElementById('toggle-macd-line'); // Nuevo
+        const toggleMacdSignal = document.getElementById('toggle-macd-signal'); // Nuevo
+        const toggleMacdHistogram = document.getElementById('toggle-macd-histogram'); // Nuevo
+        const toggleStochK = document.getElementById('toggle-stoch-k'); // Nuevo
+        const toggleStochD = document.getElementById('toggle-stoch-d'); // Nuevo
+
 
         const allHistoryList = document.getElementById('all-history-list');
         const aciertosList = document.getElementById('aciertos-list');
@@ -502,11 +609,14 @@
         let priceChartInstance, countdownInterval;
         let allCryptos = []; 
 
+        // Cachés para los datos del gráfico (ahora incluyen MACD y Stoch)
         let currentPriceDataCache = null;
         let currentSmaShortCache = null;
         let currentSmaLongCache = null;
         let currentBollingerBandsCache = null;
         let currentRsiCache = null; 
+        let currentMacdDataCache = null; // Nuevo
+        let currentStochDataCache = null; // Nuevo
 
         // ===================================================================================
         // --- INICIALIZACIÓN DE LA APLICACIÓN ---
@@ -603,7 +713,7 @@
          * Ahora los datos de los indicadores vienen directamente del backend.
          * Se asegura de que los datos de los indicadores sean arrays válidos antes de mapear.
          */
-        function renderPriceChart(priceData, smaShort, smaLong, bb, rsi) {
+        function renderPriceChart(priceData, smaShort, smaLong, bb, rsi, macdData, stochData) {
             console.log("renderPriceChart: Iniciando renderizado del gráfico."); 
             if (priceChartInstance) priceChartInstance.destroy();
 
@@ -642,11 +752,46 @@
                 datasets.push({ label: `RSI (${RSI_PERIOD})`, data: rsi.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null), borderColor: '#4bc0c0', borderWidth: 1.5, pointRadius: 0, fill: false, yAxisID: 'y-rsi' });
             }
 
+            // --- Nuevos datasets para MACD ---
+            if (toggleMacdLine.checked && macdData && macdData.macd_line && Array.isArray(macdData.macd_line) && macdData.macd_line.length > 0) {
+                datasets.push({ label: 'MACD Línea', data: macdData.macd_line.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null), borderColor: '#8A2BE2', borderWidth: 1.5, pointRadius: 0, fill: false, yAxisID: 'y-macd' });
+            }
+            if (toggleMacdSignal.checked && macdData && macdData.signal_line && Array.isArray(macdData.signal_line) && macdData.signal_line.length > 0) {
+                datasets.push({ label: 'MACD Señal', data: macdData.signal_line.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null), borderColor: '#FFD700', borderWidth: 1.5, pointRadius: 0, fill: false, yAxisID: 'y-macd' });
+            }
+            if (toggleMacdHistogram.checked && macdData && macdData.histogram && Array.isArray(macdData.histogram) && macdData.histogram.length > 0) {
+                datasets.push({ 
+                    label: 'MACD Histograma', 
+                    data: macdData.histogram.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null), 
+                    type: 'bar', // Histograma como barras
+                    backgroundColor: (context) => { // Color dinámico para histograma
+                        const value = context.parsed.y;
+                        return value >= 0 ? 'rgba(75, 192, 192, 0.5)' : 'rgba(255, 99, 132, 0.5)';
+                    },
+                    yAxisID: 'y-macd' 
+                });
+            }
+
+            // --- Nuevos datasets para Oscilador Estocástico ---
+            if (toggleStochK.checked && stochData && stochData.k_line && Array.isArray(stochData.k_line) && stochData.k_line.length > 0) {
+                datasets.push({ label: 'Stoch %K', data: stochData.k_line.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null), borderColor: '#FF4500', borderWidth: 1.5, pointRadius: 0, fill: false, yAxisID: 'y-stoch' });
+            }
+            if (toggleStochD.checked && stochData && stochData.d_line && Array.isArray(stochData.d_line) && stochData.d_line.length > 0) {
+                datasets.push({ label: 'Stoch %D', data: stochData.d_line.map((val, i) => val ? { x: priceData[i].x, y: val.y } : null), borderColor: '#DA70D6', borderWidth: 1.5, pointRadius: 0, fill: false, yAxisID: 'y-stoch' });
+            }
+
+
             const annotations = {};
             if (toggleRsi.checked) {
                 annotations.rsiOverboughtLine = { type: 'line', yMin: RSI_OVERBOUGHT, yMax: RSI_OVERBOUGHT, borderColor: 'red', borderWidth: 1, borderDash: [5, 5], yAxisID: 'y-rsi', label: { content: 'Sobrecompra', enabled: true, position: 'start', color: '#e0e0e0', backgroundColor: 'rgba(255, 0, 0, 0.5)'} };
                 annotations.rsiOversoldLine = { type: 'line', yMin: RSI_OVERSOLD, yMax: RSI_OVERSOLD, borderColor: 'green', borderWidth: 1, borderDash: [5, 5], yAxisID: 'y-rsi', label: { content: 'Sobreventa', enabled: true, position: 'start', color: '#e0e0e0', backgroundColor: 'rgba(0, 128, 0, 0.5)'} };
             }
+            // Anotaciones para Estocástico
+            if (toggleStochK.checked || toggleStochD.checked) {
+                annotations.stochOverboughtLine = { type: 'line', yMin: STOCH_OVERBOUGHT, yMax: STOCH_OVERBOUGHT, borderColor: 'red', borderWidth: 1, borderDash: [5, 5], yAxisID: 'y-stoch', label: { content: 'Sobrecompra', enabled: true, position: 'start', color: '#e0e0e0', backgroundColor: 'rgba(255, 0, 0, 0.5)'} };
+                annotations.stochOversoldLine = { type: 'line', yMin: STOCH_OVERSOLD, yMax: STOCH_OVERSOLD, borderColor: 'green', borderWidth: 1, borderDash: [5, 5], yAxisID: 'y-stoch', label: { content: 'Sobreventa', enabled: true, position: 'start', color: '#e0e0e0', backgroundColor: 'rgba(0, 128, 0, 0.5)'} };
+            }
+
 
             priceChartInstance = new Chart(ctx, {
                 type: 'line',
@@ -659,7 +804,11 @@
                         'y-price': { type: 'linear', display: true, position: 'left',
                             title: { display: true, text: 'Precio (USD)', color: '#e0e0e0' }, ticks: { color: '#e0e0e0' }, grid: { color: '#333' } },
                         'y-rsi': { type: 'linear', display: toggleRsi.checked, position: 'right', min: 0, max: 100,
-                            title: { display: true, text: 'RSI', color: '#4bc0c0' }, ticks: { color: '#4bc0c0' }, grid: { drawOnChartArea: false } }
+                            title: { display: true, text: 'RSI', color: '#4bc0c0' }, ticks: { color: '#4bc0c0' }, grid: { drawOnChartArea: false } },
+                        'y-macd': { type: 'linear', display: toggleMacdLine.checked || toggleMacdSignal.checked || toggleMacdHistogram.checked, position: 'right',
+                            title: { display: true, text: 'MACD', color: '#8A2BE2' }, ticks: { color: '#8A2BE2' }, grid: { drawOnChartArea: false } },
+                        'y-stoch': { type: 'linear', display: toggleStochK.checked || toggleStochD.checked, position: 'right', min: 0, max: 100,
+                            title: { display: true, text: 'Stoch', color: '#FF4500' }, ticks: { color: '#FF4500' }, grid: { drawOnChartArea: false } }
                     },
                     plugins: { tooltip: { mode: 'index', intersect: false }, legend: { labels: { color: '#e0e0e0' } }, annotation: { annotations: annotations } }
                 }
@@ -668,16 +817,20 @@
         }
         
         // updateSignals ahora solo actualiza los paneles UI con la info recibida del backend
-        function updateSignals(analysisData, closingPrices) { // Recibe analysisData del backend
+        function updateSignals(analysisData) { // Recibe analysisData del backend
             smaSignalDiv.classList.remove('alert-buy', 'alert-sell');
             rsiSignalDiv.classList.remove('alert-buy', 'alert-sell');
             bbSignalDiv.classList.remove('alert-buy', 'alert-sell');
+            macdSignalDiv.classList.remove('alert-buy', 'alert-sell'); // Nuevo
+            stochSignalDiv.classList.remove('alert-buy', 'alert-sell'); // Nuevo
 
             // Usar directamente las señales recibidas del backend
             const signals = {
                 sma: analysisData.sma,
                 rsi: analysisData.rsi,
                 bb: analysisData.bb,
+                macd: analysisData.macd, // Nuevo
+                stoch: analysisData.stoch, // Nuevo
                 overall: analysisData.overall_rec // overall_rec es la recomendación combinada
             };
 
@@ -698,6 +851,18 @@
             else if (signals.bb === 'sell') { bbSignalDiv.textContent = `BB: Precio sobre banda superior ⬆️ (Venta)`; bbSignalDiv.className = 'signal sell alert-sell'; }
             else if (signals.bb === 'hold') { bbSignalDiv.textContent = `BB: Precio dentro de la banda 🔄`; bbSignalDiv.className = 'signal hold'; }
             else { bbSignalDiv.textContent = 'BB: Datos insuficientes'; bbSignalDiv.className = 'signal hold'; } // N/A
+
+            // MACD (Nuevo)
+            if (signals.macd === 'buy') { macdSignalDiv.textContent = `MACD: Cruce alcista ⬆️`; macdSignalDiv.className = 'signal buy alert-buy'; }
+            else if (signals.macd === 'sell') { macdSignalDiv.textContent = `MACD: Cruce bajista ⬇️`; macdSignalDiv.className = 'signal sell alert-sell'; }
+            else if (signals.macd === 'hold') { macdSignalDiv.textContent = `MACD: Neutral ↔️`; macdSignalDiv.className = 'signal hold'; }
+            else { macdSignalDiv.textContent = 'MACD: Datos insuficientes'; macdSignalDiv.className = 'signal hold'; }
+
+            // Oscilador Estocástico (Nuevo)
+            if (signals.stoch === 'buy') { stochSignalDiv.textContent = `Stoch: Cruce alcista/Sobreventa ✅`; stochSignalDiv.className = 'signal oversold alert-buy'; }
+            else if (signals.stoch === 'sell') { stochSignalDiv.textContent = `Stoch: Cruce bajista/Sobrecompra ⚠️`; stochSignalDiv.className = 'signal overbought alert-sell'; }
+            else if (signals.stoch === 'hold') { stochSignalDiv.textContent = `Stoch: Neutral ⚖️`; stochSignalDiv.className = 'signal hold'; }
+            else { stochSignalDiv.textContent = 'Stoch: Datos insuficientes'; stochSignalDiv.className = 'signal hold'; }
             
             console.log("Señales individuales actualizadas con datos del backend.");
         }
@@ -726,26 +891,26 @@
             }
 
 
-            recommendationsMap.buy.sort().forEach(symbol => {
+            recommendationsMap.buy.sort((a, b) => a.symbol.localeCompare(b.symbol)).forEach(item => { // Ordenar por símbolo
                 const li = document.createElement('li');
-                li.textContent = symbol;
+                li.innerHTML = `${item.symbol} <span class="opportunity-details">(SL: ${item.sl_price ? item.sl_price.toFixed(2) : '--'}, TP: ${item.tp_price ? item.tp_price.toFixed(2) : '--'})</span>`;
                 buyList.appendChild(li);
             });
             if (recommendationsMap.buy.length === 0 && hasData) buyList.innerHTML = '<li>Ninguna</li>';
 
 
-            recommendationsMap.sell.sort().forEach(symbol => {
+            recommendationsMap.sell.sort((a, b) => a.symbol.localeCompare(b.symbol)).forEach(item => { // Ordenar por símbolo
                 const li = document.createElement('li');
-                li.textContent = symbol;
+                li.innerHTML = `${item.symbol} <span class="opportunity-details">(SL: ${item.sl_price ? item.sl_price.toFixed(2) : '--'}, TP: ${item.tp_price ? item.tp_price.toFixed(2) : '--'})</span>`;
                 sellList.appendChild(li);
             });
             if (recommendationsMap.sell.length === 0 && hasData) sellList.innerHTML = '<li>Ninguna</li>';
 
 
             const allHoldSymbols = [...recommendationsMap.hold, ...recommendationsMap.error];
-            allHoldSymbols.sort().forEach(symbol => {
+            allHoldSymbols.sort((a, b) => a.symbol.localeCompare(b.symbol)).forEach(item => { // Ordenar por símbolo
                 const li = document.createElement('li');
-                li.textContent = symbol;
+                li.innerHTML = `${item.symbol} <span class="opportunity-details">(SL: ${item.sl_price ? item.sl_price.toFixed(2) : '--'}, TP: ${item.tp_price ? item.tp_price.toFixed(2) : '--'})</span>`;
                 holdList.appendChild(li);
             });
             if (allHoldSymbols.length === 0 && hasData) holdList.innerHTML = '<li>Ninguna</li>';
@@ -905,13 +1070,18 @@
             console.log("Inicio de runSelectedCryptoAnalysis (obteniendo de backend).");
             if (countdownInterval) clearInterval(countdownInterval);
 
-            smaSignalDiv.textContent = 'Cargando...';
-            rsiSignalDiv.textContent = 'Cargando...';
-            bbSignalDiv.textContent = 'Cargando...';
-            smaSignalDiv.className = 'signal hold';
-            rsiSignalDiv.className = 'signal hold';
-            bbSignalDiv.className = 'signal hold';
+            // Resetear señales
+            smaSignalDiv.textContent = 'Cargando...'; smaSignalDiv.className = 'signal hold';
+            rsiSignalDiv.textContent = 'Cargando...'; rsiSignalDiv.className = 'signal hold';
+            bbSignalDiv.textContent = 'Cargando...'; bbSignalDiv.className = 'signal hold';
+            macdSignalDiv.textContent = 'Cargando...'; macdSignalDiv.className = 'signal hold'; // Nuevo
+            stochSignalDiv.textContent = 'Cargando...'; stochSignalDiv.className = 'signal hold'; // Nuevo
             updateTimerDiv.textContent = "";
+
+            // Resetear SL/TP
+            currentPriceDisplay.textContent = '--';
+            stopLossDisplay.textContent = '--';
+            takeProfitDisplay.textContent = '--';
 
             priceNoDataMessage.style.display = 'none';
             priceChartCanvas.style.display = 'block';
@@ -934,6 +1104,8 @@
                 smaSignalDiv.textContent = 'Error: No hay datos.';
                 rsiSignalDiv.textContent = 'Error: No hay datos.';
                 bbSignalDiv.textContent = 'Error: No hay datos.';
+                macdSignalDiv.textContent = 'Error: No hay datos.'; // Nuevo
+                stochSignalDiv.textContent = 'Error: No hay datos.'; // Nuevo
                 updateTimerDiv.textContent = "Datos no disponibles del backend";
                 
                 // Aseguramos que los caches sean nulls/vacíos si no hay datos
@@ -942,6 +1114,8 @@
                 currentSmaLongCache = null;
                 currentBollingerBandsCache = null;
                 currentRsiCache = null;
+                currentMacdDataCache = null; // Nuevo
+                currentStochDataCache = null; // Nuevo
 
                 if (priceChartInstance) priceChartInstance.destroy();
                 priceChartCanvas.style.display = 'none';
@@ -955,12 +1129,20 @@
             currentSmaLongCache = analysisData.sma_long;
             currentBollingerBandsCache = analysisData.bb_bands;
             currentRsiCache = analysisData.rsi_data; 
+            currentMacdDataCache = analysisData.macd_data; // Nuevo
+            currentStochDataCache = analysisData.stoch_data; // Nuevo
             
             console.log(`runSelectedCryptoAnalysis: Renderizando gráficos para ${selectedSymbol} con datos del backend.`);
-            renderPriceChart(currentPriceDataCache, currentSmaShortCache, currentSmaLongCache, currentBollingerBandsCache, currentRsiCache);
+            renderPriceChart(currentPriceDataCache, currentSmaShortCache, currentSmaLongCache, currentBollingerBandsCache, currentRsiCache, currentMacdDataCache, currentStochDataCache);
             
             // Actualizar señales individuales con los datos recibidos del backend
-            updateSignals(analysisData, null); 
+            updateSignals(analysisData); 
+
+            // Actualizar display de Stop-Loss/Take-Profit
+            const lastPrice = analysisData.klines.length > 0 ? analysisData.klines[analysisData.klines.length - 1].y : null;
+            currentPriceDisplay.textContent = lastPrice ? `$${lastPrice.toFixed(2)}` : '--';
+            stopLossDisplay.textContent = analysisData.stop_loss_price ? `$${analysisData.stop_loss_price.toFixed(2)}` : '--';
+            takeProfitDisplay.textContent = analysisData.take_profit_price ? `$${analysisData.take_profit_price.toFixed(2)}` : '--';
             
             startUpdateTimer(UPDATE_INTERVAL_SELECTED_CRYPTO / 1000);
             console.log("Análisis de criptomoneda seleccionada completado (datos de backend).");
@@ -992,16 +1174,22 @@
                 const analysisData = await getLatestAnalysisFromBackend(symbol); 
                 
                 if (analysisData && analysisData.overall_rec) {
+                    const item = {
+                        symbol: symbol,
+                        sl_price: analysisData.stop_loss_price,
+                        tp_price: analysisData.take_profit_price
+                    };
+
                     if (analysisData.overall_rec === 'buy') {
-                        tempRecommendations.buy.push(symbol);
+                        tempRecommendations.buy.push(item);
                     } else if (analysisData.overall_rec === 'sell') {
-                        tempRecommendations.sell.push(symbol);
+                        tempRecommendations.sell.push(item);
                     } else { // 'hold' o 'N/A'
-                        tempRecommendations.hold.push(symbol);
+                        tempRecommendations.hold.push(item);
                     }
                 } else {
                     // Si no hay datos válidos del backend para este símbolo, lo ponemos en "Hold" con una nota
-                    tempRecommendations.hold.push(`${symbol} (Sin datos)`); 
+                    tempRecommendations.hold.push({ symbol: `${symbol} (Sin datos)`, sl_price: null, tp_price: null }); 
                 }
             }
             renderOpportunityColumns(tempRecommendations); // Actualizar el DOM con las oportunidades
@@ -1021,7 +1209,8 @@
             if (allCryptos.length > 0) {
                 runSelectedCryptoAnalysis(); 
                 updateAllCryptosOpportunities(); // Carga las oportunidades (que es la primera página del historial)
-                
+                loadHistoricalRecommendationsFromBackend(); // Carga el historial
+
                 setInterval(runSelectedCryptoAnalysis, UPDATE_INTERVAL_SELECTED_CRYPTO);
                 setInterval(updateAllCryptosOpportunities, UPDATE_INTERVAL_ALL_CRYPTOS); 
                 setInterval(loadHistoricalRecommendationsFromBackend, HISTORY_UPDATE_INTERVAL); 
@@ -1029,7 +1218,7 @@
                 console.error("No se encontraron criptomonedas en la lista estática. La aplicación no puede iniciar correctamente.");
                 priceNoDataMessage.textContent = "Error: No se encontraron criptomonedas en la lista.";
                 priceNoDataMessage.style.display = 'flex';
-                renderOpportunityColumns({ buy: [], sell: [], hold: [], error: ['No hay criptos en la lista.'] });
+                renderOpportunityColumns({ buy: [], sell: [], hold: [], error: [{ symbol: 'No hay criptos en la lista.', sl_price: null, tp_price: null }] });
             }
         });
 
@@ -1039,7 +1228,8 @@
         indicatorCheckboxes.forEach(checkbox => {
             checkbox.addEventListener('change', () => {
                 if (currentPriceDataCache) { 
-                    renderPriceChart(currentPriceDataCache, currentSmaShortCache, currentSmaLongCache, currentBollingerBandsCache, currentRsiCache);
+                    // Se pasan los nuevos cachés a la función de renderizado
+                    renderPriceChart(currentPriceDataCache, currentSmaShortCache, currentSmaLongCache, currentBollingerBandsCache, currentRsiCache, currentMacdDataCache, currentStochDataCache);
                 } else {
                     console.warn("No hay datos en caché para redibujar el gráfico con los indicadores.");
                 }
@@ -1062,22 +1252,5 @@
         });
 
     </script>
-
-<script>
-
-
-async function loadCurrentOpportunitiesFromBackend() {
-    try {
-        const response = await fetch(`${BACKEND_URL}/get_current_opportunities`);
-        const data = await response.json();
-        console.log("Oportunidades desde backend:", data);
-    } catch (e) {
-        console.error("Error cargando oportunidades:", e);
-    }
-}
-
-setInterval(loadCurrentOpportunitiesFromBackend, 300000);
-loadCurrentOpportunitiesFromBackend();
-</script>
 </body>
 </html>
