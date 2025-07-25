@@ -26,6 +26,23 @@ current_analysis_cache = {}
 
 SYMBOLS_TO_MONITOR = []
 
+# --- CONSTANTES PARA NUEVOS INDICADORES Y GESTIÓN DE RIESGOS ---
+# Parámetros para MACD
+MACD_FAST_PERIOD = 12
+MACD_SLOW_PERIOD = 26
+MACD_SIGNAL_PERIOD = 9
+
+# Parámetros para Oscilador Estocástico
+STOCH_K_PERIOD = 14
+STOCH_D_PERIOD = 3
+STOCH_OVERBOUGHT = 80
+STOCH_OVERSOLD = 20
+
+# Parámetros para Stop-Loss y Take-Profit
+STOP_LOSS_PERCENTAGE = 0.02 # 2% por debajo del precio actual
+TAKE_PROFIT_PERCENTAGE = 0.04 # 4% por encima del precio actual
+
+
 # --- CSV UTILITY FUNCTIONS ---
 def ensure_csv_exists():
     """Ensures the CSV files for data and last recommendations exist, creating them with headers if not."""
@@ -37,7 +54,7 @@ def ensure_csv_exists():
     if not os.path.exists(LAST_REC_FILE):
         with open(LAST_REC_FILE, mode='w', newline='', encoding='utf-8') as file:
             writer = csv.writer(file)
-            writer.writerow(['symbol', 'timestamp', 'recommendation', 'sma_rec', 'rsi_rec', 'bb_rec', 'last_price'])
+            writer.writerow(['symbol', 'timestamp', 'recommendation', 'sma_rec', 'rsi_rec', 'bb_rec', 'macd_rec', 'stoch_rec', 'last_price'])
 
 ensure_csv_exists()
 
@@ -52,7 +69,7 @@ def get_last_recommendation_from_file(symbol):
                 return row
     return None
 
-def update_last_recommendation_file(symbol, timestamp_iso, recommendation, sma_rec, rsi_rec, bb_rec, current_price):
+def update_last_recommendation_file(symbol, timestamp_iso, recommendation, sma_rec, rsi_rec, bb_rec, macd_rec, stoch_rec, current_price):
     """Updates or adds the last recommendation for a symbol in the CSV file."""
     rows = []
     found = False
@@ -71,6 +88,8 @@ def update_last_recommendation_file(symbol, timestamp_iso, recommendation, sma_r
                 'sma_rec': sma_rec,
                 'rsi_rec': rsi_rec,
                 'bb_rec': bb_rec,
+                'macd_rec': macd_rec, # Nuevo
+                'stoch_rec': stoch_rec, # Nuevo
                 'last_price': current_price
             })
             found = True
@@ -85,11 +104,15 @@ def update_last_recommendation_file(symbol, timestamp_iso, recommendation, sma_r
             'sma_rec': sma_rec,
             'rsi_rec': rsi_rec,
             'bb_rec': bb_rec,
+            'macd_rec': macd_rec, # Nuevo
+            'stoch_rec': stoch_rec, # Nuevo
             'last_price': current_price
         })
 
     with open(LAST_REC_FILE, mode='w', newline='', encoding='utf-8') as file:
-        writer = csv.DictWriter(file, fieldnames=['symbol', 'timestamp', 'recommendation', 'sma_rec', 'rsi_rec', 'bb_rec', 'last_price'])
+        # Actualizar fieldnames para incluir los nuevos indicadores
+        fieldnames=['symbol', 'timestamp', 'recommendation', 'sma_rec', 'rsi_rec', 'bb_rec', 'macd_rec', 'stoch_rec', 'last_price']
+        writer = csv.DictWriter(file, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(updated_rows)
 
@@ -238,6 +261,26 @@ def calculate_sma(data, period):
             sma.append({'y': sum_val / period})
     return sma
 
+def calculate_ema(data, period):
+    """Calculates Exponential Moving Average (EMA) for given data."""
+    if not data or len(data) < period:
+        return [None] * len(data) if data else []
+
+    ema_values = []
+    smoothing_factor = 2 / (period + 1)
+
+    # Calculate initial SMA for the first EMA point
+    initial_sma = sum(data[0:period]) / period
+    ema_values.append(initial_sma)
+
+    for i in range(period, len(data)):
+        ema = (data[i] - ema_values[-1]) * smoothing_factor + ema_values[-1]
+        ema_values.append(ema)
+    
+    # Pad with None for initial points
+    return [None] * (period - 1) + [{'y': val} for val in ema_values]
+
+
 def calculate_bollinger_bands(data, period, std_dev_multiplier):
     """Calculates Bollinger Bands (BB) for given data."""
     middle = []
@@ -265,11 +308,10 @@ def calculate_bollinger_bands(data, period, std_dev_multiplier):
 def calculate_rsi(data, period):
     """Calculates Relative Strength Index (RSI) for given data."""
     rsi_values = []
-
+    
     if not data or len(data) < period + 1:
         return [None] * len(data) if data else []
 
-    # Initialize with None for the first 'period' entries
     for _ in range(period):
         rsi_values.append(None)
 
@@ -280,7 +322,6 @@ def calculate_rsi(data, period):
         gains.append(diff if diff > 0 else 0)
         losses.append(abs(diff) if diff < 0 else 0)
 
-    # Calculate initial average gain and loss
     avg_gain = sum(gains[0:period]) / period
     avg_loss = sum(losses[0:period]) / period
 
@@ -290,7 +331,6 @@ def calculate_rsi(data, period):
         rs = avg_gain / avg_loss
         rsi_values.append({'y': 100 - (100 / (1 + rs))})
 
-    # Calculate subsequent RSI values
     for i in range(period, len(gains)):
         current_gain = gains[i]
         current_loss = losses[i]
@@ -305,20 +345,91 @@ def calculate_rsi(data, period):
             rsi_values.append({'y': 100 - (100 / (1 + rs))})
     return rsi_values
 
+def calculate_macd(data, fast_period, slow_period, signal_period):
+    """Calculates Moving Average Convergence Divergence (MACD) for given data."""
+    if not data or len(data) < max(fast_period, slow_period) + signal_period:
+        return {'macd_line': [None]*len(data), 'signal_line': [None]*len(data), 'histogram': [None]*len(data)}
+
+    ema_fast = [v['y'] for v in calculate_ema(data, fast_period)]
+    ema_slow = [v['y'] for v in calculate_ema(data, slow_period)]
+
+    macd_line = []
+    for i in range(len(data)):
+        if ema_fast[i] is not None and ema_slow[i] is not None:
+            macd_line.append(ema_fast[i] - ema_slow[i])
+        else:
+            macd_line.append(None)
+
+    # Calculate signal line (EMA of MACD line)
+    signal_line_raw = calculate_ema([m for m in macd_line if m is not None], signal_period)
+    signal_line = [None] * (len(macd_line) - len(signal_line_raw)) + [s['y'] for s in signal_line_raw]
+
+    histogram = []
+    for i in range(len(macd_line)):
+        if macd_line[i] is not None and signal_line[i] is not None:
+            histogram.append(macd_line[i] - signal_line[i])
+        else:
+            histogram.append(None)
+    
+    # Format for Chart.js
+    macd_line_formatted = [{'y': val} if val is not None else None for val in macd_line]
+    signal_line_formatted = [{'y': val} if val is not None else None for val in signal_line]
+    histogram_formatted = [{'y': val} if val is not None else None for val in histogram]
+
+    return {'macd_line': macd_line_formatted, 'signal_line': signal_line_formatted, 'histogram': histogram_formatted}
+
+
+def calculate_stochastic_oscillator(data, k_period, d_period):
+    """Calculates Stochastic Oscillator (%K and %D) for given data."""
+    if not data or len(data) < k_period:
+        return {'k_line': [None]*len(data), 'd_line': [None]*len(data)}
+
+    k_line = []
+    for i in range(len(data)):
+        if i < k_period - 1:
+            k_line.append(None)
+        else:
+            period_low = min(data[i - k_period + 1 : i + 1])
+            period_high = max(data[i - k_period + 1 : i + 1])
+            current_close = data[i]
+
+            if (period_high - period_low) != 0:
+                k = ((current_close - period_low) / (period_high - period_low)) * 100
+            else:
+                k = 50 # Avoid division by zero, neutral value
+            k_line.append(k)
+    
+    # Calculate %D line (SMA of %K line)
+    d_line_raw = calculate_sma([k for k in k_line if k is not None], d_period)
+    d_line = [None] * (len(k_line) - len(d_line_raw)) + [d['y'] for d in d_line_raw]
+
+    # Format for Chart.js
+    k_line_formatted = [{'y': val} if val is not None else None for val in k_line]
+    d_line_formatted = [{'y': val} if val is not None else None for val in d_line]
+
+    return {'k_line': k_line_formatted, 'd_line': d_line_formatted}
+
+
 # --- Combined Signals Logic ---
-def get_combined_signals(sma_short, sma_long, rsi, bollinger_bands, closing_prices):
-    """Determines combined trading signals based on SMA, RSI, and Bollinger Bands."""
+def get_combined_signals(sma_short, sma_long, rsi, bollinger_bands, macd_data, stoch_data, closing_prices):
+    """Determines combined trading signals based on SMA, RSI, Bollinger Bands, MACD, and Stochastic Oscillator."""
+    # Inicializar recomendaciones individuales
     sma_rec = 'hold'
     rsi_rec = 'hold'
     bb_rec = 'hold'
+    macd_rec = 'hold'
+    stoch_rec = 'hold'
 
-    # Parámetros de los indicadores
-    SMA_SHORT_PERIOD = 10 # Antes 20
-    SMA_LONG_PERIOD = 30  # Antes 50
-    RSI_OVERBOUGHT = 65   # Antes 70
-    RSI_OVERSOLD = 35     # Antes 30
-    BB_PERIOD = 15        # Antes 20
+    # Parámetros de los indicadores (los mismos que en scheduled_analysis_job)
+    SMA_SHORT_PERIOD = 10
+    SMA_LONG_PERIOD = 30
+    RSI_OVERBOUGHT = 65
+    RSI_OVERSOLD = 35
+    BB_PERIOD = 15
+    STOCH_OVERBOUGHT = 80
+    STOCH_OVERSOLD = 20
 
+    # Lógica para SMA
     valid_sma_short = [v['y'] for v in sma_short if v is not None]
     valid_sma_long = [v['y'] for v in sma_long if v is not None]
     if len(valid_sma_short) >= 2 and len(valid_sma_long) >= 2:
@@ -333,16 +444,18 @@ def get_combined_signals(sma_short, sma_long, rsi, bollinger_bands, closing_pric
     else:
         sma_rec = 'N/A'
 
+    # Lógica para RSI
     valid_rsi = [v['y'] for v in rsi if v is not None]
     if len(valid_rsi) > 0:
         last_rsi = valid_rsi[-1]
-        if last_rsi > RSI_OVERBOUGHT: # Usar nuevo umbral
+        if last_rsi > RSI_OVERBOUGHT:
             rsi_rec = 'sell'
-        elif last_rsi < RSI_OVERSOLD: # Usar nuevo umbral
+        elif last_rsi < RSI_OVERSOLD:
             rsi_rec = 'buy'
     else:
         rsi_rec = 'N/A'
 
+    # Lógica para Bandas de Bollinger
     valid_bb_upper = [v['y'] for v in bollinger_bands['upper'] if v is not None]
     valid_bb_lower = [v['y'] for v in bollinger_bands['lower'] if v is not None]
     last_price_val = closing_prices[-1] if closing_prices else None
@@ -357,6 +470,48 @@ def get_combined_signals(sma_short, sma_long, rsi, bollinger_bands, closing_pric
     else:
         bb_rec = 'N/A'
 
+    # Lógica para MACD
+    valid_macd_line = [v['y'] for v in macd_data['macd_line'] if v is not None]
+    valid_signal_line = [v['y'] for v in macd_data['signal_line'] if v is not None]
+    if len(valid_macd_line) >= 2 and len(valid_signal_line) >= 2:
+        last_macd = valid_macd_line[-1]
+        prev_macd = valid_macd_line[-2]
+        last_signal = valid_signal_line[-1]
+        prev_signal = valid_signal_line[-2]
+
+        # Cruce alcista: MACD cruza por encima de la línea de señal
+        if prev_macd <= prev_signal and last_macd > last_signal:
+            macd_rec = 'buy'
+        # Cruce bajista: MACD cruza por debajo de la línea de señal
+        elif prev_macd >= prev_signal and last_macd < last_signal:
+            macd_rec = 'sell'
+    else:
+        macd_rec = 'N/A'
+
+    # Lógica para Oscilador Estocástico
+    valid_k_line = [v['y'] for v in stoch_data['k_line'] if v is not None]
+    valid_d_line = [v['y'] for v in stoch_data['d_line'] if v is not None]
+    if len(valid_k_line) > 0 and len(valid_d_line) > 0:
+        last_k = valid_k_line[-1]
+        last_d = valid_d_line[-1]
+
+        # Cruce alcista y sobreventa
+        if last_k > last_d and last_k < STOCH_OVERSOLD:
+            stoch_rec = 'buy'
+        # Cruce bajista y sobrecompra
+        elif last_k < last_d and last_k > STOCH_OVERBOUGHT:
+            stoch_rec = 'sell'
+        # Cruce alcista general (menos fuerte)
+        elif last_k > last_d and valid_k_line[-2] <= valid_d_line[-2]:
+            stoch_rec = 'buy'
+        # Cruce bajista general (menos fuerte)
+        elif last_k < last_d and valid_k_line[-2] >= valid_d_line[-2]:
+            stoch_rec = 'sell'
+    else:
+        stoch_rec = 'N/A'
+
+
+    # Conteo de señales
     buy_count = 0
     sell_count = 0
     na_count = 0
@@ -372,10 +527,18 @@ def get_combined_signals(sma_short, sma_long, rsi, bollinger_bands, closing_pric
     if bb_rec == 'buy': buy_count += 1
     elif bb_rec == 'sell': sell_count += 1
     else: na_count += 1
+    
+    if macd_rec == 'buy': buy_count += 1 # Nuevo
+    elif macd_rec == 'sell': sell_count += 1 # Nuevo
+    else: na_count += 1 # Nuevo
+
+    if stoch_rec == 'buy': buy_count += 1 # Nuevo
+    elif stoch_rec == 'sell': sell_count += 1 # Nuevo
+    else: na_count += 1 # Nuevo
 
     overall_recommendation = 'hold'
 
-    # Lógica de combinación de señales más relajada
+    # Lógica de combinación de señales más relajada (mayoría simple)
     if buy_count > sell_count and buy_count >= 1: # Si hay más señales de compra y al menos una
         overall_recommendation = 'buy'
     elif sell_count > buy_count and sell_count >= 1: # Si hay más señales de venta y al menos una
@@ -384,7 +547,8 @@ def get_combined_signals(sma_short, sma_long, rsi, bollinger_bands, closing_pric
         overall_recommendation = 'hold'
 
     # Se devuelven los conteos para fines de diagnóstico
-    return {'sma': sma_rec, 'rsi': rsi_rec, 'bb': bb_rec, 'overall': overall_recommendation,
+    return {'sma': sma_rec, 'rsi': rsi_rec, 'bb': bb_rec, 'macd': macd_rec, 'stoch': stoch_rec, # Añadidos
+            'overall': overall_recommendation,
             'buy_count': buy_count, 'sell_count': sell_count, 'na_count': na_count}
 
 
@@ -401,6 +565,9 @@ async def scheduled_analysis_job(symbols):
     SMA_LONG_PERIOD = 30  
     RSI_PERIOD = 14
     BB_PERIOD = 15        
+    # Nuevos periodos para MACD y Stochastic
+    MACD_MAX_PERIOD = max(MACD_FAST_PERIOD, MACD_SLOW_PERIOD) + MACD_SIGNAL_PERIOD
+    STOCH_MAX_PERIOD = STOCH_K_PERIOD + STOCH_D_PERIOD
 
     for symbol in symbols:
         try:
@@ -408,17 +575,17 @@ async def scheduled_analysis_job(symbols):
             klines_data = await get_kucoin_klines(symbol)
 
             # Define la cantidad mínima de velas requeridas para los indicadores
-            # Se usa el máximo de los periodos para asegurar suficientes datos
-            min_required_klines = max(SMA_SHORT_PERIOD, SMA_LONG_PERIOD, RSI_PERIOD, BB_PERIOD) + 1 
+            # Se usa el máximo de todos los periodos para asegurar que haya suficientes puntos para el cálculo inicial.
+            min_required_klines = max(SMA_SHORT_PERIOD, SMA_LONG_PERIOD, RSI_PERIOD, BB_PERIOD, MACD_MAX_PERIOD, STOCH_MAX_PERIOD) + 1 
             
             if not klines_data or len(klines_data) < min_required_klines:
                 print(f"  [{datetime.now().isoformat()}] {symbol}: Datos insuficientes. Velas obtenidas: {len(klines_data) if klines_data else 0}, Requeridas: {min_required_klines}. Saltando análisis detallado.")
                 current_overall_rec = 'hold'
-                individual_recs = {'sma': 'N/A', 'rsi': 'N/A', 'bb': 'N/A'}
+                individual_recs = {'sma': 'N/A', 'rsi': 'N/A', 'bb': 'N/A', 'macd': 'N/A', 'stoch': 'N/A'} # Actualizado
                 current_price = klines_data[-1]['y'] if klines_data and len(klines_data) > 0 else 0.0
                 
                 # Log detallado para casos de datos insuficientes
-                print(f"  [{datetime.now().isoformat()}] {symbol}: Señales Individuales: SMA: {individual_recs['sma']}, RSI: {individual_recs['rsi']}, BB: {individual_recs['bb']}. Recomendación General: {current_overall_rec}")
+                print(f"  [{datetime.now().isoformat()}] {symbol}: Señales Individuales: SMA: {individual_recs['sma']}, RSI: {individual_recs['rsi']}, BB: {individual_recs['bb']}, MACD: {individual_recs['macd']}, Stoch: {individual_recs['stoch']}. Recomendación General: {current_overall_rec}")
 
             else:
                 closing_prices = [p['y'] for p in klines_data]
@@ -429,13 +596,22 @@ async def scheduled_analysis_job(symbols):
                 sma_long = calculate_sma(closing_prices, SMA_LONG_PERIOD)
                 bollinger_bands = calculate_bollinger_bands(closing_prices, BB_PERIOD, 2) # std_dev_multiplier se mantiene en 2
                 rsi = calculate_rsi(closing_prices, RSI_PERIOD)
+                macd_data = calculate_macd(closing_prices, MACD_FAST_PERIOD, MACD_SLOW_PERIOD, MACD_SIGNAL_PERIOD) # Nuevo
+                stoch_data = calculate_stochastic_oscillator(closing_prices, STOCH_K_PERIOD, STOCH_D_PERIOD) # Nuevo
 
-                combined_signals = get_combined_signals(sma_short, sma_long, rsi, bollinger_bands, closing_prices)
+                combined_signals = get_combined_signals(sma_short, sma_long, rsi, bollinger_bands, macd_data, stoch_data, closing_prices) # Actualizado
                 current_overall_rec = combined_signals['overall']
-                individual_recs = {'sma': combined_signals['sma'], 'rsi': combined_signals['rsi'], 'bb': combined_signals['bb']}
+                # Actualizar individual_recs para incluir los nuevos indicadores
+                individual_recs = {'sma': combined_signals['sma'], 'rsi': combined_signals['rsi'], 'bb': combined_signals['bb'],
+                                   'macd': combined_signals['macd'], 'stoch': combined_signals['stoch']}
                 
+                # --- Gestión de Riesgos: Cálculo Básico de Stop-Loss y Take-Profit ---
+                # Estos son solo niveles sugeridos, no se ejecutan automáticamente.
+                stop_loss_price = round(current_price * (1 - STOP_LOSS_PERCENTAGE), 2)
+                take_profit_price = round(current_price * (1 + TAKE_PROFIT_PERCENTAGE), 2)
+
                 # Log detallado para el análisis completo
-                print(f"  [{datetime.now().isoformat()}] {symbol}: Velas obtenidas: {len(klines_data)}. Señales Individuales: SMA: {individual_recs['sma']}, RSI: {individual_recs['rsi']}, BB: {individual_recs['bb']}. Conteo: Compra: {combined_signals['buy_count']}, Venta: {combined_signals['sell_count']}, N/A: {combined_signals['na_count']}. Recomendación General: {current_overall_rec}")
+                print(f"  [{datetime.now().isoformat()}] {symbol}: Velas obtenidas: {len(klines_data)}. Señales Individuales: SMA: {individual_recs['sma']}, RSI: {individual_recs['rsi']}, BB: {individual_recs['bb']}, MACD: {individual_recs['macd']}, Stoch: {individual_recs['stoch']}. Conteo: Compra: {combined_signals['buy_count']}, Venta: {combined_signals['sell_count']}, N/A: {combined_signals['na_count']}. Recomendación General: {current_overall_rec}. SL: {stop_loss_price}, TP: {take_profit_price}")
 
 
             # Update cache with full results for this symbol
@@ -444,11 +620,17 @@ async def scheduled_analysis_job(symbols):
                 'sma': individual_recs['sma'],
                 'rsi': individual_recs['rsi'],
                 'bb': individual_recs['bb'],
+                'macd': individual_recs['macd'], # Nuevo
+                'stoch': individual_recs['stoch'], # Nuevo
                 'klines': klines_data,
                 'sma_short': sma_short,
                 'sma_long': sma_long,
                 'bb_bands': bollinger_bands,
-                'rsi_data': rsi
+                'rsi_data': rsi,
+                'macd_data': macd_data, # Nuevo
+                'stoch_data': stoch_data, # Nuevo
+                'stop_loss_price': stop_loss_price, # Nuevo
+                'take_profit_price': take_profit_price # Nuevo
             }
 
             # Decide whether to save the recommendation (1 hour / 3% change logic)
@@ -482,11 +664,14 @@ async def scheduled_analysis_job(symbols):
                 last_prev_sma_rec = last_rec_info.get('sma_rec', 'N/A') if last_rec_info else 'N/A'
                 last_prev_rsi_rec = last_rec_info.get('rsi_rec', 'N/A') if last_rec_info else 'N/A'
                 last_prev_bb_rec = last_rec_info.get('bb_rec', 'N/A') if last_rec_info else 'N/A'
+                last_prev_macd_rec = last_rec_info.get('macd_rec', 'N/A') if last_rec_info else 'N/A' # Nuevo
+                last_prev_stoch_rec = last_rec_info.get('stoch_rec', 'N/A') if last_rec_info else 'N/A' # Nuevo
 
                 metric_type = 'N/A'
                 metric_value = 0.0
                 details = ""
 
+                # Ajustar la lógica de comparación para 5 indicadores
                 if last_prev_rec != 'N/A' and current_overall_rec != 'N/A':
                     if current_overall_rec == last_prev_rec:
                         metric_type = 'Acierto'
@@ -494,16 +679,20 @@ async def scheduled_analysis_job(symbols):
                         if individual_recs['sma'] == last_prev_sma_rec and individual_recs['sma'] != 'N/A': match_count += 1
                         if individual_recs['rsi'] == last_prev_rsi_rec and individual_recs['rsi'] != 'N/A': match_count += 1
                         if individual_recs['bb'] == last_prev_bb_rec and individual_recs['bb'] != 'N/A': match_count += 1
-                        metric_value = (match_count / 3) * 100 if match_count > 0 else 0
-                        details = f"Rec. mantenida. Indicadores coincidentes: {match_count}/3."
+                        if individual_recs['macd'] == last_prev_macd_rec and individual_recs['macd'] != 'N/A': match_count += 1 # Nuevo
+                        if individual_recs['stoch'] == last_prev_stoch_rec and individual_recs['stoch'] != 'N/A': match_count += 1 # Nuevo
+                        metric_value = (match_count / 5) * 100 if match_count > 0 else 0 # Dividir por 5
+                        details = f"Rec. mantenida. Indicadores coincidentes: {match_count}/5."
                     else:
                         metric_type = 'Riesgo'
                         change_count = 0
                         if individual_recs['sma'] != last_prev_sma_rec and individual_recs['sma'] != 'N/A': change_count += 1
                         if individual_recs['rsi'] != last_prev_rsi_rec and individual_recs['rsi'] != 'N/A': change_count += 1
                         if individual_recs['bb'] != last_prev_bb_rec and individual_recs['bb'] != 'N/A': change_count += 1
-                        metric_value = (change_count / 3) * 100 if change_count > 0 else 0
-                        details = f"Rec. cambió de '{last_prev_rec}' a '{current_overall_rec}'. Indicadores cambiantes: {change_count}/3."
+                        if individual_recs['macd'] != last_prev_macd_rec and individual_recs['macd'] != 'N/A': change_count += 1 # Nuevo
+                        if individual_recs['stoch'] != last_prev_stoch_rec and individual_recs['stoch'] != 'N/A': change_count += 1 # Nuevo
+                        metric_value = (change_count / 5) * 100 if change_count > 0 else 0 # Dividir por 5
+                        details = f"Rec. cambió de '{last_prev_rec}' a '{current_overall_rec}'. Indicadores cambiantes: {change_count}/5."
                 else:
                     details = "Primera recomendación para el símbolo o datos insuficientes para comparar."
 
@@ -519,7 +708,8 @@ async def scheduled_analysis_job(symbols):
                         details
                     ])
 
-                update_last_recommendation_file(symbol, now_dt.isoformat().replace('+00:00', 'Z'), current_overall_rec, individual_recs['sma'], individual_recs['rsi'], individual_recs['bb'], current_price)
+                # Actualizar update_last_recommendation_file con los nuevos indicadores
+                update_last_recommendation_file(symbol, now_dt.isoformat().replace('+00:00', 'Z'), current_overall_rec, individual_recs['sma'], individual_recs['rsi'], individual_recs['bb'], individual_recs['macd'], individual_recs['stoch'], current_price)
                 print(f"[{datetime.now().isoformat()}] Saved new entry for {symbol}: {current_overall_rec}, Price: {current_price}")
             else:
                 print(f"[{datetime.now().isoformat()}] Skipping save for {symbol}: No significant change or time not passed.")
@@ -549,8 +739,10 @@ def get_recommendations():
             header = next(reader, None) # Skip header
 
             for row in reader:
+                # Asegurarse de que la fila tenga al menos 7 elementos (los originales)
                 if len(row) >= 7:
                     try:
+                        # Extraer los primeros 7 elementos para compatibilidad con el formato anterior
                         timestamp_str, symbol, recommendation, prev_recommendation, metric_type, metric_value_str, details = row[:7]
                         entry_timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00')).replace(tzinfo=timezone.utc)
 
@@ -624,13 +816,17 @@ async def get_latest_analysis(symbol):
         SMA_LONG_PERIOD = 30  
         RSI_PERIOD = 14
         BB_PERIOD = 15        
+        MACD_MAX_PERIOD = max(MACD_FAST_PERIOD, MACD_SLOW_PERIOD) + MACD_SIGNAL_PERIOD
+        STOCH_MAX_PERIOD = STOCH_K_PERIOD + STOCH_D_PERIOD
 
-        min_required_klines = max(SMA_SHORT_PERIOD, SMA_LONG_PERIOD, RSI_PERIOD, BB_PERIOD) + 1
+        min_required_klines = max(SMA_SHORT_PERIOD, SMA_LONG_PERIOD, RSI_PERIOD, BB_PERIOD, MACD_MAX_PERIOD, STOCH_MAX_PERIOD) + 1
         if not klines_data or len(klines_data) < min_required_klines:
             print(f"[{datetime.now().isoformat()}] Insufficient data for {symbol} on live fetch for frontend. Returning empty.")
             return jsonify({
-                'overall_rec': 'hold', 'sma': 'N/A', 'rsi': 'N/A', 'bb': 'N/A',
-                'klines': [], 'sma_short': [], 'sma_long': [], 'bb_bands': {'middle':[],'upper':[],'lower':[]}, 'rsi_data': []
+                'overall_rec': 'hold', 'sma': 'N/A', 'rsi': 'N/A', 'bb': 'N/A', 'macd': 'N/A', 'stoch': 'N/A',
+                'klines': [], 'sma_short': [], 'sma_long': [], 'bb_bands': {'middle':[],'upper':[],'lower':[]}, 'rsi_data': [],
+                'macd_data': {'macd_line': [], 'signal_line': [], 'histogram': []}, 'stoch_data': {'k_line': [], 'd_line': []},
+                'stop_loss_price': None, 'take_profit_price': None
             }), 200
 
         closing_prices = [p['y'] for p in klines_data]
@@ -640,18 +836,31 @@ async def get_latest_analysis(symbol):
         sma_long = calculate_sma(closing_prices, SMA_LONG_PERIOD)
         bollinger_bands = calculate_bollinger_bands(closing_prices, BB_PERIOD, 2)
         rsi = calculate_rsi(closing_prices, RSI_PERIOD)
-        combined_signals = get_combined_signals(sma_short, sma_long, rsi, bollinger_bands, closing_prices)
+        macd_data = calculate_macd(closing_prices, MACD_FAST_PERIOD, MACD_SLOW_PERIOD, MACD_SIGNAL_PERIOD)
+        stoch_data = calculate_stochastic_oscillator(closing_prices, STOCH_K_PERIOD, STOCH_D_PERIOD)
+
+        combined_signals = get_combined_signals(sma_short, sma_long, rsi, bollinger_bands, macd_data, stoch_data, closing_prices)
+
+        current_price = closing_prices[-1] if closing_prices else 0.0
+        stop_loss_price = round(current_price * (1 - STOP_LOSS_PERCENTAGE), 2)
+        take_profit_price = round(current_price * (1 + TAKE_PROFIT_PERCENTAGE), 2)
 
         response_data = {
             'overall_rec': combined_signals['overall'],
             'sma': combined_signals['sma'],
             'rsi': combined_signals['rsi'],
             'bb': combined_signals['bb'],
+            'macd': combined_signals['macd'],
+            'stoch': combined_signals['stoch'],
             'klines': klines_data,
             'sma_short': sma_short,
             'sma_long': sma_long,
             'bb_bands': bollinger_bands,
-            'rsi_data': rsi
+            'rsi_data': rsi,
+            'macd_data': macd_data,
+            'stoch_data': stoch_data,
+            'stop_loss_price': stop_loss_price,
+            'take_profit_price': take_profit_price
         }
         current_analysis_cache[symbol] = response_data
 
