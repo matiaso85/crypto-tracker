@@ -38,9 +38,10 @@ STOCH_D_PERIOD = 3
 STOCH_OVERBOUGHT = 80
 STOCH_OVERSOLD = 20
 
-# Parámetros para Stop-Loss y Take-Profit
-STOP_LOSS_PERCENTAGE = 0.02 # 2% por debajo del precio actual
-TAKE_PROFIT_PERCENTAGE = 0.04 # 4% por encima del precio actual
+# Parámetros para Stop-Loss y Take-Profit (AHORA BASADOS EN ATR)
+ATR_PERIOD = 14 # Período para calcular el ATR
+ATR_STOP_LOSS_MULTIPLIER = 2.0 # Multiplicador de ATR para Stop-Loss
+ATR_TAKE_PROFIT_MULTIPLIER = 3.0 # Multiplicador de ATR para Take-Profit
 
 
 # --- CSV UTILITY FUNCTIONS ---
@@ -208,7 +209,10 @@ async def get_all_kucoin_symbols():
 
 # --- DATA RETRIEVAL FUNCTIONS (KUCOIN API for Klines) ---
 async def get_kucoin_klines(symbol, interval=KUCOIN_INTERVAL, limit=KUCOIN_LIMIT):
-    """Fetches candlestick data (klines) for a given symbol from the KuCoin API."""
+    """
+    Fetches candlestick data (klines) for a given symbol from the KuCoin API.
+    Returns 'x' (timestamp), 'y' (close), 'high', and 'low' prices.
+    """
     kucoin_symbol = symbol
     url = f"https://api.kucoin.com/api/v1/market/candles?symbol={kucoin_symbol}&type={interval}&limit={limit}"
 
@@ -223,14 +227,16 @@ async def get_kucoin_klines(symbol, interval=KUCOIN_INTERVAL, limit=KUCOIN_LIMIT
                 print(f"[{datetime.now().isoformat()}] No candlestick data returned for {kucoin_symbol}.")
                 return [] # Return empty list instead of None
             
-            formatted_prices = []
+            formatted_klines = []
             for kline in data['data']:
-                formatted_prices.append({
+                formatted_klines.append({
                     'x': int(kline[0]) * 1000, # Timestamp in milliseconds
-                    'y': float(kline[2])      # Closing price
+                    'y': float(kline[2]),      # Closing price
+                    'high': float(kline[3]),   # High price
+                    'low': float(kline[4])     # Low price
                 })
 
-            return formatted_prices[::-1] # Reverse to have oldest first
+            return formatted_klines[::-1] # Reverse to have oldest first
 
     except httpx.HTTPStatusError as e:
         print(f"KuCoin HTTP Error for {kucoin_symbol}: {e.response.status_code} - {e.response.text}")
@@ -468,6 +474,46 @@ def calculate_stochastic_oscillator(data, k_period, d_period):
 
     return {'k_line': k_line_formatted, 'd_line': d_line}
 
+def calculate_atr(high_prices, low_prices, closing_prices, period):
+    """Calculates Average True Range (ATR) for given data."""
+    # Need at least period + 1 data points for ATR (period for initial EMA, plus one for previous close)
+    if not high_prices or not low_prices or not closing_prices or len(high_prices) < period + 1:
+        return [{'y': None}] * len(high_prices) if high_prices else []
+
+    true_ranges = []
+    for i in range(len(high_prices)):
+        if i == 0:
+            true_ranges.append(None) # No previous close for the first point
+            continue
+
+        high = high_prices[i]
+        low = low_prices[i]
+        prev_close = closing_prices[i-1]
+
+        if high is None or low is None or prev_close is None:
+            true_ranges.append(None)
+            continue
+
+        tr1 = high - low
+        tr2 = abs(high - prev_close)
+        tr3 = abs(low - prev_close)
+        true_ranges.append(max(tr1, tr2, tr3))
+
+    # ATR is typically an EMA of True Ranges
+    # Filter out None values for EMA calculation
+    valid_true_ranges = [tr for tr in true_ranges if tr is not None]
+
+    if len(valid_true_ranges) < period:
+        return [{'y': None}] * len(high_prices) if high_prices else []
+
+    atr_ema_raw = calculate_ema(valid_true_ranges, period)
+    
+    # Pad ATR with {'y': None} values at the beginning
+    atr_formatted = [{'y': None}] * (len(high_prices) - len(atr_ema_raw))
+    atr_formatted.extend(atr_ema_raw)
+    
+    return atr_formatted
+
 
 # --- Combined Signals Logic ---
 def get_combined_signals(sma_short, sma_long, rsi, bollinger_bands, macd_data, stoch_data, closing_prices):
@@ -636,11 +682,12 @@ async def scheduled_analysis_job(symbols):
 
         try:
             print(f"[{datetime.now().isoformat()}] Analyzing {symbol}...")
+            # Obtener klines con high, low y close
             klines_data = await get_kucoin_klines(symbol)
 
             # Define la cantidad mínima de velas requeridas para los indicadores
             # Se usa el máximo de todos los periodos para asegurar que haya suficientes puntos para el cálculo inicial.
-            min_required_klines = max(SMA_SHORT_PERIOD, SMA_LONG_PERIOD, RSI_PERIOD, BB_PERIOD, MACD_MAX_PERIOD, STOCH_MAX_PERIOD) + 1 
+            min_required_klines = max(SMA_SHORT_PERIOD, SMA_LONG_PERIOD, RSI_PERIOD, BB_PERIOD, MACD_MAX_PERIOD, STOCH_MAX_PERIOD, ATR_PERIOD) + 1 
             
             if not klines_data or len(klines_data) < min_required_klines:
                 print(f"  [{datetime.now().isoformat()}] {symbol}: Datos insuficientes. Velas obtenidas: {len(klines_data) if klines_data else 0}, Requeridas: {min_required_klines}. Saltando análisis detallado.")
@@ -653,6 +700,8 @@ async def scheduled_analysis_job(symbols):
 
             else:
                 closing_prices = [p['y'] for p in klines_data]
+                high_prices = [p['high'] for p in klines_data] # Nuevo
+                low_prices = [p['low'] for p in klines_data]   # Nuevo
                 current_price = closing_prices[-1] # Ahora es seguro acceder
 
                 # Se pasan los periodos actualizados a las funciones de cálculo
@@ -662,6 +711,7 @@ async def scheduled_analysis_job(symbols):
                 rsi = calculate_rsi(closing_prices, RSI_PERIOD)
                 macd_data = calculate_macd(closing_prices, MACD_FAST_PERIOD, MACD_SLOW_PERIOD, MACD_SIGNAL_PERIOD) # Nuevo
                 stoch_data = calculate_stochastic_oscillator(closing_prices, STOCH_K_PERIOD, STOCH_D_PERIOD) # Nuevo
+                atr_values = calculate_atr(high_prices, low_prices, closing_prices, ATR_PERIOD) # Nuevo
 
                 combined_signals = get_combined_signals(sma_short, sma_long, rsi, bollinger_bands, macd_data, stoch_data, closing_prices) # Actualizado
                 current_overall_rec = combined_signals['overall']
@@ -669,10 +719,19 @@ async def scheduled_analysis_job(symbols):
                 individual_recs = {'sma': combined_signals['sma'], 'rsi': combined_signals['rsi'], 'bb': combined_signals['bb'],
                                    'macd': combined_signals['macd'], 'stoch': combined_signals['stoch']}
                 
-                # --- Gestión de Riesgos: Cálculo Básico de Stop-Loss y Take-Profit ---
-                # Estos son solo niveles sugeridos, no se ejecutan automáticamente.
-                stop_loss_price = round(current_price * (1 - STOP_LOSS_PERCENTAGE), 2)
-                take_profit_price = round(current_price * (1 + TAKE_PROFIT_PERCENTAGE), 2)
+                # --- Gestión de Riesgos: Cálculo Dinámico de Stop-Loss y Take-Profit con ATR ---
+                latest_atr = atr_values[-1]['y'] if atr_values and atr_values[-1] and atr_values[-1]['y'] is not None else 0.0
+
+                if current_overall_rec == 'buy' and latest_atr > 0:
+                    stop_loss_price = round(current_price - (latest_atr * ATR_STOP_LOSS_MULTIPLIER), 2)
+                    take_profit_price = round(current_price + (latest_atr * ATR_TAKE_PROFIT_MULTIPLIER), 2)
+                elif current_overall_rec == 'sell' and latest_atr > 0: # Para una posición corta
+                    stop_loss_price = round(current_price + (latest_atr * ATR_STOP_LOSS_MULTIPLIER), 2)
+                    take_profit_price = round(current_price - (latest_atr * ATR_TAKE_PROFIT_MULTIPLIER), 2)
+                else: # Hold o N/A o ATR no válido
+                    stop_loss_price = None
+                    take_profit_price = None
+
 
                 # Log detallado para el análisis completo
                 print(f"  [{datetime.now().isoformat()}] {symbol}: Velas obtenidas: {len(klines_data)}. Señales Individuales: SMA: {individual_recs['sma']}, RSI: {individual_recs['rsi']}, BB: {individual_recs['bb']}, MACD: {individual_recs['macd']}, Stoch: {individual_recs['stoch']}. Conteo: Compra: {combined_signals['buy_count']}, Venta: {combined_signals['sell_count']}, N/A: {combined_signals['na_count']}. Recomendación General: {current_overall_rec}. SL: {stop_loss_price}, TP: {take_profit_price}")
@@ -896,8 +955,9 @@ async def get_latest_analysis(symbol):
         BB_PERIOD = 15        
         MACD_MAX_PERIOD = max(MACD_FAST_PERIOD, MACD_SLOW_PERIOD) + MACD_SIGNAL_PERIOD
         STOCH_MAX_PERIOD = STOCH_K_PERIOD + STOCH_D_PERIOD
+        ATR_MIN_REQUIRED = ATR_PERIOD + 1 # ATR necesita al menos (period + 1) velas
 
-        min_required_klines = max(SMA_SHORT_PERIOD, SMA_LONG_PERIOD, RSI_PERIOD, BB_PERIOD, MACD_MAX_PERIOD, STOCH_MAX_PERIOD) + 1
+        min_required_klines = max(SMA_SHORT_PERIOD, SMA_LONG_PERIOD, RSI_PERIOD, BB_PERIOD, MACD_MAX_PERIOD, STOCH_MAX_PERIOD, ATR_MIN_REQUIRED) + 1
         
         if len(klines_data) < min_required_klines: # Ahora solo necesitamos verificar la longitud
             print(f"[{datetime.now().isoformat()}] Insufficient data for {symbol} on live fetch for frontend. Returning empty.")
@@ -906,6 +966,8 @@ async def get_latest_analysis(symbol):
             pass 
         else:
             closing_prices = [p['y'] for p in klines_data]
+            high_prices = [p['high'] for p in klines_data] # Nuevo
+            low_prices = [p['low'] for p in klines_data]   # Nuevo
             current_price = closing_prices[-1]
 
             # Se pasan los periodos actualizados a las funciones de cálculo
@@ -915,11 +977,22 @@ async def get_latest_analysis(symbol):
             rsi = calculate_rsi(closing_prices, RSI_PERIOD)
             macd_data = calculate_macd(closing_prices, MACD_FAST_PERIOD, MACD_SLOW_PERIOD, MACD_SIGNAL_PERIOD)
             stoch_data = calculate_stochastic_oscillator(closing_prices, STOCH_K_PERIOD, STOCH_D_PERIOD)
+            atr_values = calculate_atr(high_prices, low_prices, closing_prices, ATR_PERIOD) # Nuevo
 
             combined_signals = get_combined_signals(sma_short, sma_long, rsi, bollinger_bands, macd_data, stoch_data, closing_prices)
             
-            stop_loss_price = round(current_price * (1 - STOP_LOSS_PERCENTAGE), 2)
-            take_profit_price = round(current_price * (1 + TAKE_PROFIT_PERCENTAGE), 2)
+            # --- Gestión de Riesgos: Cálculo Dinámico de Stop-Loss y Take-Profit con ATR ---
+            latest_atr = atr_values[-1]['y'] if atr_values and atr_values[-1] and atr_values[-1]['y'] is not None else 0.0
+
+            if combined_signals['overall'] == 'buy' and latest_atr > 0:
+                stop_loss_price = round(current_price - (latest_atr * ATR_STOP_LOSS_MULTIPLIER), 2)
+                take_profit_price = round(current_price + (latest_atr * ATR_TAKE_PROFIT_MULTIPLIER), 2)
+            elif combined_signals['overall'] == 'sell' and latest_atr > 0: # Para una posición corta
+                stop_loss_price = round(current_price + (latest_atr * ATR_STOP_LOSS_MULTIPLIER), 2)
+                take_profit_price = round(current_price - (latest_atr * ATR_TAKE_PROFIT_MULTIPLIER), 2)
+            else: # Hold o N/A o ATR no válido
+                stop_loss_price = None
+                take_profit_price = None
 
         response_data = {
             'overall_rec': combined_signals['overall'],
@@ -956,13 +1029,13 @@ def get_current_opportunities():
     for symbol, data in current_analysis_cache.items():
         if data and data.get('overall_rec'):
             if data['overall_rec'] == 'buy':
-                opportunities['buy'].append(symbol)
+                opportunities['buy'].append({'symbol': symbol, 'sl_price': data.get('stop_loss_price'), 'tp_price': data.get('take_profit_price')})
             elif data['overall_rec'] == 'sell':
-                opportunities['sell'].append(symbol)
+                opportunities['sell'].append({'symbol': symbol, 'sl_price': data.get('stop_loss_price'), 'tp_price': data.get('take_profit_price')})
             else:
-                opportunities['hold'].append(symbol)
+                opportunities['hold'].append({'symbol': symbol, 'sl_price': data.get('stop_loss_price'), 'tp_price': data.get('take_profit_price')})
         else:
-            opportunities['no_data'].append(symbol)
+            opportunities['no_data'].append({'symbol': symbol, 'sl_price': None, 'tp_price': None})
     return jsonify(opportunities), 200
 
 
