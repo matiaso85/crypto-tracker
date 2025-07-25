@@ -251,11 +251,11 @@ def calculate_sma(data, period):
     """Calculates Simple Moving Average (SMA) for given data."""
     sma = []
     if not data or len(data) < period:
-        return [None] * len(data) if data else []
+        return [{'y': None}] * len(data) if data else [] # Return list of {'y': None} or empty
 
     for i in range(len(data)):
         if i < period - 1:
-            sma.append(None)
+            sma.append({'y': None})
         else:
             slic = data[i - period + 1 : i + 1]
             sum_val = sum(slic)
@@ -265,21 +265,40 @@ def calculate_sma(data, period):
 def calculate_ema(data, period):
     """Calculates Exponential Moving Average (EMA) for given data."""
     if not data or len(data) < period:
-        return [None] * len(data) if data else []
+        return [{'y': None}] * len(data) if data else [] # Return list of {'y': None} or empty
 
-    ema_values = []
+    ema_values_raw = [] # Store raw EMA values (numbers or None)
     smoothing_factor = 2 / (period + 1)
 
     # Calculate initial SMA for the first EMA point
-    initial_sma = sum(data[0:period]) / period
-    ema_values.append(initial_sma)
+    initial_sma_data = data[0:period]
+    # Ensure initial_sma_data contains only numbers, otherwise return empty
+    if not all(isinstance(x, (int, float)) for x in initial_sma_data):
+        return [{'y': None}] * len(data) if data else []
+
+    initial_sma = sum(initial_sma_data) / period
+    ema_values_raw.append(initial_sma)
 
     for i in range(period, len(data)):
-        ema = (data[i] - ema_values[-1]) * smoothing_factor + ema_values[-1]
-        ema_values.append(ema)
+        current_data_point = data[i]
+        prev_ema = ema_values_raw[-1]
+
+        if current_data_point is None or prev_ema is None:
+            ema_values_raw.append(None) # Propagate None if any input is None
+        else:
+            ema = (current_data_point - prev_ema) * smoothing_factor + prev_ema
+            ema_values_raw.append(ema)
     
-    # Pad with None for initial points
-    return [None] * (period - 1) + [{'y': val} for val in ema_values]
+    # Format for Chart.js, padding with {'y': None} at the beginning
+    # The length of the returned list should match the input data length
+    # The first (period - 1) elements will be {'y': None}
+    formatted_ema_list = [{'y': None}] * (period - 1)
+    for val in ema_values_raw:
+        if val is not None:
+            formatted_ema_list.append({'y': val})
+        else:
+            formatted_ema_list.append({'y': None}) # Append {'y': None} if the raw EMA value was None
+    return formatted_ema_list
 
 
 def calculate_bollinger_bands(data, period, std_dev_multiplier):
@@ -288,14 +307,14 @@ def calculate_bollinger_bands(data, period, std_dev_multiplier):
     upper = []
     lower = []
     if not data or len(data) < period:
-        nulls = [None] * len(data) if data else []
+        nulls = [{'y': None}] * len(data) if data else [] # Return list of {'y': None} or empty
         return {'middle': nulls, 'upper': nulls, 'lower': nulls}
 
     for i in range(len(data)):
         if i < period - 1:
-            middle.append(None)
-            upper.append(None)
-            lower.append(None)
+            middle.append({'y': None})
+            upper.append({'y': None})
+            lower.append({'y': None})
         else:
             slic = data[i - period + 1 : i + 1]
             mean = sum(slic) / period
@@ -311,10 +330,10 @@ def calculate_rsi(data, period):
     rsi_values = []
     
     if not data or len(data) < period + 1:
-        return [None] * len(data) if data else []
+        return [{'y': None}] * len(data) if data else [] # Return list of {'y': None} or empty
 
     for _ in range(period):
-        rsi_values.append(None)
+        rsi_values.append({'y': None})
 
     gains = []
     losses = []
@@ -348,11 +367,18 @@ def calculate_rsi(data, period):
 
 def calculate_macd(data, fast_period, slow_period, signal_period):
     """Calculates Moving Average Convergence Divergence (MACD) for given data."""
-    if not data or len(data) < max(fast_period, slow_period) + signal_period:
-        return {'macd_line': [None]*len(data) if data else [], 'signal_line': [None]*len(data) if data else [], 'histogram': [None]*len(data) if data else []}
+    # Ensure data is sufficient for initial EMA calculations
+    if not data or len(data) < max(fast_period, slow_period):
+        return {'macd_line': [{'y': None}] * len(data) if data else [],
+                'signal_line': [{'y': None}] * len(data) if data else [],
+                'histogram': [{'y': None}] * len(data) if data else []}
 
-    ema_fast = [v['y'] for v in calculate_ema(data, fast_period)]
-    ema_slow = [v['y'] for v in calculate_ema(data, slow_period)]
+    ema_fast_raw = calculate_ema(data, fast_period)
+    ema_slow_raw = calculate_ema(data, slow_period)
+
+    # Extract 'y' values, handling potential None dictionaries
+    ema_fast = [v['y'] if v is not None else None for v in ema_fast_raw]
+    ema_slow = [v['y'] if v is not None else None for v in ema_slow_raw]
 
     macd_line = []
     for i in range(len(data)):
@@ -364,37 +390,54 @@ def calculate_macd(data, fast_period, slow_period, signal_period):
     # Calculate signal line (EMA of MACD line)
     # Filter out None values before calculating EMA for signal line
     valid_macd_line_for_signal = [m for m in macd_line if m is not None]
+    
+    # Ensure enough data for signal line EMA
+    if len(valid_macd_line_for_signal) < signal_period:
+        return {'macd_line': [{'y': val} if val is not None else {'y': None} for val in macd_line],
+                'signal_line': [{'y': None}] * len(data) if data else [],
+                'histogram': [{'y': None}] * len(data) if data else []}
+
     signal_line_raw = calculate_ema(valid_macd_line_for_signal, signal_period)
     
-    # Pad signal_line with None values at the beginning to match original data length
-    signal_line = [None] * (len(macd_line) - len(signal_line_raw)) + [s['y'] for s in signal_line_raw]
+    # Pad signal_line with {'y': None} values at the beginning to match original data length
+    signal_line = [{'y': None}] * (len(macd_line) - len(signal_line_raw))
+    signal_line.extend(signal_line_raw) # signal_line_raw already contains {'y': val}
 
     histogram = []
     for i in range(len(macd_line)):
-        if macd_line[i] is not None and signal_line[i] is not None:
-            histogram.append(macd_line[i] - signal_line[i])
+        # Ensure both macd_line and signal_line values are not None before subtraction
+        macd_val = macd_line[i]
+        signal_val = signal_line[i]['y'] if signal_line[i] is not None else None # Access 'y' safely
+
+        if macd_val is not None and signal_val is not None:
+            histogram.append(macd_val - signal_val)
         else:
             histogram.append(None)
     
     # Format for Chart.js
-    macd_line_formatted = [{'y': val} if val is not None else None for val in macd_line]
-    signal_line_formatted = [{'y': val} if val is not None else None for val in signal_line]
-    histogram_formatted = [{'y': val} if val is not None else None for val in histogram]
+    macd_line_formatted = [{'y': val} if val is not None else {'y': None} for val in macd_line]
+    histogram_formatted = [{'y': val} if val is not None else {'y': None} for val in histogram]
 
-    return {'macd_line': macd_line_formatted, 'signal_line': signal_line_formatted, 'histogram': histogram_formatted}
+    return {'macd_line': macd_line_formatted, 'signal_line': signal_line, 'histogram': histogram_formatted}
 
 
 def calculate_stochastic_oscillator(data, k_period, d_period):
     """Calculates Stochastic Oscillator (%K and %D) for given data."""
     if not data or len(data) < k_period:
-        return {'k_line': [None]*len(data) if data else [], 'd_line': [None]*len(data) if data else []}
+        return {'k_line': [{'y': None}] * len(data) if data else [],
+                'd_line': [{'y': None}] * len(data) if data else []}
 
-    k_line = []
+    k_line_raw = [] # Store raw %K values (numbers or None)
     for i in range(len(data)):
         if i < k_period - 1:
-            k_line.append(None)
+            k_line_raw.append(None)
         else:
             period_data = data[i - k_period + 1 : i + 1]
+            # Ensure period_data contains only numbers for min/max
+            if not all(isinstance(x, (int, float)) for x in period_data):
+                k_line_raw.append(None)
+                continue
+
             period_low = min(period_data)
             period_high = max(period_data)
             current_close = data[i]
@@ -403,21 +446,27 @@ def calculate_stochastic_oscillator(data, k_period, d_period):
                 k = ((current_close - period_low) / (period_high - period_low)) * 100
             else:
                 k = 50 # Avoid division by zero, neutral value
-            k_line.append(k)
+            k_line_raw.append(k)
     
     # Calculate %D line (SMA of %K line)
     # Filter out None values before calculating SMA for D line
-    valid_k_line_for_d = [k for k in k_line if k is not None]
+    valid_k_line_for_d = [k for k in k_line_raw if k is not None]
+    
+    # Ensure enough data for D line SMA
+    if len(valid_k_line_for_d) < d_period:
+        return {'k_line': [{'y': val} if val is not None else {'y': None} for val in k_line_raw],
+                'd_line': [{'y': None}] * len(data) if data else []}
+
     d_line_raw = calculate_sma(valid_k_line_for_d, d_period)
     
-    # Pad d_line with None values at the beginning to match original data length
-    d_line = [None] * (len(k_line) - len(d_line_raw)) + [d['y'] for d in d_line_raw]
+    # Pad d_line with {'y': None} values at the beginning to match original data length
+    d_line = [{'y': None}] * (len(k_line_raw) - len(d_line_raw))
+    d_line.extend(d_line_raw) # d_line_raw already contains {'y': val}
 
     # Format for Chart.js
-    k_line_formatted = [{'y': val} if val is not None else None for val in k_line]
-    d_line_formatted = [{'y': val} if val is not None else None for val in d_line]
+    k_line_formatted = [{'y': val} if val is not None else {'y': None} for val in k_line_raw]
 
-    return {'k_line': k_line_formatted, 'd_line': d_line_formatted}
+    return {'k_line': k_line_formatted, 'd_line': d_line}
 
 
 # --- Combined Signals Logic ---
@@ -440,8 +489,8 @@ def get_combined_signals(sma_short, sma_long, rsi, bollinger_bands, macd_data, s
     STOCH_OVERSOLD = 20
 
     # Lógica para SMA
-    valid_sma_short = [v['y'] for v in sma_short if v is not None]
-    valid_sma_long = [v['y'] for v in sma_long if v is not None]
+    valid_sma_short = [v['y'] for v in sma_short if v is not None and v['y'] is not None]
+    valid_sma_long = [v['y'] for v in sma_long if v is not None and v['y'] is not None]
     if len(valid_sma_short) >= 2 and len(valid_sma_long) >= 2:
         last_sma_short = valid_sma_short[-1]
         prev_sma_short = valid_sma_short[-2]
@@ -455,7 +504,7 @@ def get_combined_signals(sma_short, sma_long, rsi, bollinger_bands, macd_data, s
         sma_rec = 'N/A'
 
     # Lógica para RSI
-    valid_rsi = [v['y'] for v in rsi if v is not None]
+    valid_rsi = [v['y'] for v in rsi if v is not None and v['y'] is not None]
     if len(valid_rsi) > 0:
         last_rsi = valid_rsi[-1]
         if last_rsi > RSI_OVERBOUGHT:
@@ -466,8 +515,8 @@ def get_combined_signals(sma_short, sma_long, rsi, bollinger_bands, macd_data, s
         rsi_rec = 'N/A'
 
     # Lógica para Bandas de Bollinger
-    valid_bb_upper = [v['y'] for v in bollinger_bands['upper'] if v is not None]
-    valid_bb_lower = [v['y'] for v in bollinger_bands['lower'] if v is not None]
+    valid_bb_upper = [v['y'] for v in bollinger_bands['upper'] if v is not None and v['y'] is not None]
+    valid_bb_lower = [v['y'] for v in bollinger_bands['lower'] if v is not None and v['y'] is not None]
     last_price_val = closing_prices[-1] if closing_prices else None
 
     if len(valid_bb_upper) > 0 and len(valid_bb_lower) > 0 and last_price_val is not None:
@@ -481,8 +530,8 @@ def get_combined_signals(sma_short, sma_long, rsi, bollinger_bands, macd_data, s
         bb_rec = 'N/A'
 
     # Lógica para MACD
-    valid_macd_line = [v['y'] for v in macd_data['macd_line'] if v is not None]
-    valid_signal_line = [v['y'] for v in macd_data['signal_line'] if v is not None]
+    valid_macd_line = [v['y'] for v in macd_data['macd_line'] if v is not None and v['y'] is not None]
+    valid_signal_line = [v['y'] for v in macd_data['signal_line'] if v is not None and v['y'] is not None]
     if len(valid_macd_line) >= 2 and len(valid_signal_line) >= 2:
         last_macd = valid_macd_line[-1]
         prev_macd = valid_macd_line[-2]
@@ -499,8 +548,8 @@ def get_combined_signals(sma_short, sma_long, rsi, bollinger_bands, macd_data, s
         macd_rec = 'N/A'
 
     # Lógica para Oscilador Estocástico
-    valid_k_line = [v['y'] for v in stoch_data['k_line'] if v is not None]
-    valid_d_line = [v['y'] for v in stoch_data['d_line'] if v is not None]
+    valid_k_line = [v['y'] for v in stoch_data['k_line'] if v is not None and v['y'] is not None]
+    valid_d_line = [v['y'] for v in stoch_data['d_line'] if v is not None and v['y'] is not None]
     if len(valid_k_line) > 0 and len(valid_d_line) > 0:
         last_k = valid_k_line[-1]
         last_d = valid_d_line[-1]
