@@ -221,7 +221,7 @@ async def get_kucoin_klines(symbol, interval=KUCOIN_INTERVAL, limit=KUCOIN_LIMIT
 
             if not data or not data.get('data') or not isinstance(data['data'], list) or len(data['data']) == 0:
                 print(f"[{datetime.now().isoformat()}] No candlestick data returned for {kucoin_symbol}.")
-                return None # Return None if no data
+                return [] # Return empty list instead of None
             
             formatted_prices = []
             for kline in data['data']:
@@ -234,16 +234,16 @@ async def get_kucoin_klines(symbol, interval=KUCOIN_INTERVAL, limit=KUCOIN_LIMIT
 
     except httpx.HTTPStatusError as e:
         print(f"KuCoin HTTP Error for {kucoin_symbol}: {e.response.status_code} - {e.response.text}")
-        return None
+        return [] # Return empty list instead of None
     except httpx.RequestError as e:
         print(f"Network error connecting to KuCoin for {kucoin_symbol}: {e}")
-        return None
+        return [] # Return empty list instead of None
     except ValueError as e:
         print(f"KuCoin data error for {kucoin_symbol}: {e}")
-        return None
+        return [] # Return empty list instead of None
     except Exception as e:
         print(f"Unexpected error fetching KuCoin data for {kucoin_symbol}: {e}")
-        return None
+        return [] # Return empty list instead of None
 
 
 # --- INDICATOR CALCULATION FUNCTIONS ---
@@ -349,7 +349,7 @@ def calculate_rsi(data, period):
 def calculate_macd(data, fast_period, slow_period, signal_period):
     """Calculates Moving Average Convergence Divergence (MACD) for given data."""
     if not data or len(data) < max(fast_period, slow_period) + signal_period:
-        return {'macd_line': [None]*len(data), 'signal_line': [None]*len(data), 'histogram': [None]*len(data)}
+        return {'macd_line': [None]*len(data) if data else [], 'signal_line': [None]*len(data) if data else [], 'histogram': [None]*len(data) if data else []}
 
     ema_fast = [v['y'] for v in calculate_ema(data, fast_period)]
     ema_slow = [v['y'] for v in calculate_ema(data, slow_period)]
@@ -387,7 +387,7 @@ def calculate_macd(data, fast_period, slow_period, signal_period):
 def calculate_stochastic_oscillator(data, k_period, d_period):
     """Calculates Stochastic Oscillator (%K and %D) for given data."""
     if not data or len(data) < k_period:
-        return {'k_line': [None]*len(data), 'd_line': [None]*len(data)}
+        return {'k_line': [None]*len(data) if data else [], 'd_line': [None]*len(data) if data else []}
 
     k_line = []
     for i in range(len(data)):
@@ -774,7 +774,7 @@ def get_recommendations():
                     except ValueError as ve:
                         print(f"Skipping malformed row (parsing error): {row} - {ve}")
                     except IndexError as ie:
-                        print(f"Skipping malformed row (index error): {row} - {ie}")
+                        print(f"Skipping malformed row (index error): {ie}")
                 else:
                     print(f"Skipping malformed row (wrong length): {row}")
 
@@ -825,7 +825,7 @@ async def get_latest_analysis(symbol):
     print(f"[{datetime.now().isoformat()}] Cache miss for {symbol}, trying to fetch live. (This should be rare if scheduler runs)")
     
     # Inicializar estas variables con valores seguros al principio del bloque try
-    klines_data = None
+    klines_data = [] # Inicializar como lista vacía
     sma_short = []
     sma_long = []
     bollinger_bands = {'middle':[],'upper':[],'lower':[]}
@@ -838,7 +838,7 @@ async def get_latest_analysis(symbol):
     take_profit_price = None
 
     try:
-        klines_data = await get_kucoin_klines(symbol)
+        klines_data = await get_kucoin_klines(symbol) # Esta función ahora devuelve [] en lugar de None
 
         # Definir los periodos de los indicadores aquí para usarlos en min_required_klines
         SMA_SHORT_PERIOD = 10 
@@ -850,10 +850,11 @@ async def get_latest_analysis(symbol):
 
         min_required_klines = max(SMA_SHORT_PERIOD, SMA_LONG_PERIOD, RSI_PERIOD, BB_PERIOD, MACD_MAX_PERIOD, STOCH_MAX_PERIOD) + 1
         
-        if not klines_data or len(klines_data) < min_required_klines:
+        if len(klines_data) < min_required_klines: # Ahora solo necesitamos verificar la longitud
             print(f"[{datetime.now().isoformat()}] Insufficient data for {symbol} on live fetch for frontend. Returning empty.")
             # Las variables ya están inicializadas a None/empty, así que podemos devolverlas directamente
-            pass # No hacer nada aquí, las variables ya tienen los valores por defecto
+            # No hacer nada aquí, las variables ya tienen los valores por defecto
+            pass 
         else:
             closing_prices = [p['y'] for p in klines_data]
             current_price = closing_prices[-1]
@@ -878,7 +879,7 @@ async def get_latest_analysis(symbol):
             'bb': combined_signals['bb'],
             'macd': combined_signals['macd'],
             'stoch': combined_signals['stoch'],
-            'klines': klines_data if klines_data else [], # Asegurarse de que sea una lista vacía si es None
+            'klines': klines_data, # klines_data ya es [] si no hay datos
             'sma_short': sma_short,
             'sma_long': sma_long,
             'bb_bands': bollinger_bands,
@@ -893,6 +894,7 @@ async def get_latest_analysis(symbol):
         return jsonify(response_data), 200
     except Exception as e:
         print(f"[{datetime.now().isoformat()}] Error serving live analysis for {symbol}: {e}")
+        # Asegurarse de que el mensaje de error sea informativo
         return jsonify({'message': f'Error fetching live data: {str(e)}'}), 500
 
 @app.route('/get_current_opportunities', methods=['GET'])
